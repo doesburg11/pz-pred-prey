@@ -1,0 +1,104 @@
+Matrix structure observation from Pettingzoo:
+
+observation:
+[[[1. 1. 1. 1. 1.]
+  [1. 1. 1. 1. 1.]
+  [1. 0. 0. 0. 0.]
+  [1. 0. 0. 0. 0.]
+  [1. 0. 0. 0. 0.]]
+
+ [[0. 0. 0. 0. 0.]
+  [0. 0. 0. 0. 0.]
+  [0. 0. 1. 0. 0.]
+  [0. 0. 0. 0. 0.]
+  [0. 0. 0. 0. 0.]]
+
+ [[0. 0. 0. 0. 0.]
+  [0. 0. 0. 0. 0.]
+  [0. 0. 0. 0. 0.]
+  [0. 0. 0. 0. 0.]
+  [0. 0. 0. 0. 0.]]]
+
+
+  pursuit_base, 557: self.obs_range_pursuers 5
+  pursuit_base, 557: obs
+  [[[0. 0. 0. 0. 0.]
+    [0. 0. 0. 0. 0.]
+    [0. 0. 0. 0. 0.]
+    [0. 0. 0. 0. 0.]
+    [0. 0. 0. 0. 0.]]
+etc
+
+
+  predator-prey layers:
+  Predators:
+  [[0. 2. 1. 0. 0. 0. 0. 0. 0. 0.]
+   [1. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+   [0. 0. 0. 0. 0. 0. 1. 0. 0. 0.]
+   [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+   [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+   [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+   [1. 0. 0. 0. 0. 0. 0. 1. 0. 0.]
+   [0. 1. 0. 0. 0. 2. 0. 0. 0. 3.]
+   [0. 0. 0. 0. 0. 1. 2. 0. 0. 0.]
+   [2. 0. 0. 0. 0. 1. 1. 0. 0. 0.]]
+  Prey:
+  [[0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+   [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+   [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+   [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+   [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+   [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+   [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+   [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+   [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+   [0. 0. 1. 0. 0. 0. 0. 0. 0. 0.]]
+  Grass:
+  [[0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+   [0. 0. 0. 0. 0. 0. 0. 1. 0. 0.]
+   [1. 1. 0. 0. 0. 1. 1. 1. 1. 0.]
+   [0. 1. 0. 1. 0. 1. 0. 1. 0. 0.]
+   [0. 0. 0. 0. 0. 0. 0. 0. 1. 1.]
+   [0. 0. 0. 0. 0. 0. 0. 0. 1. 1.]
+   [0. 0. 1. 0. 1. 0. 1. 0. 0. 0.]
+   [0. 1. 1. 0. 0. 1. 0. 0. 1. 0.]
+   [0. 1. 0. 0. 0. 0. 1. 0. 1. 0.]
+   [0. 0. 0. 0. 0. 0. 1. 1. 0. 0.]]
+
+    def get_features(self, current_location):
+        """
+        Returns the features for a position (x,y) as a matrix 9x3
+        Row 1: predators, Row 2: prey, Row 3: grass
+        """
+        features = np.zeros(self.env.n_features)
+        n_agents_in_neighborhood = self.get_neighborhood_agents(current_location)
+        if self.env.n_prey_alive != 0:
+            features[0] = sum(n_agents_in_neighborhood[self.env.prey_type][:]) / self.env.n_prey_alive
+        else:
+            features[0] = 0
+        if self.env.n_predators_alive != 0:
+            features[1] = sum(n_agents_in_neighborhood[self.env.predator_type][:]) / self.env.n_predators_alive
+        else:
+            features[1] = 0
+        if self.env.n_grass_alive != 0:
+            features[2] = sum(n_agents_in_neighborhood[self.env.grass_type][:]) / self.env.n_grass_alive
+        else:
+            features[2] = 0
+        n_prey_in_neighborhood = sum(n_agents_in_neighborhood[self.env.prey_type][:])
+        if n_prey_in_neighborhood == 0:
+            features[3:self.env.n_features] = 0
+        else:
+            for f in range(self.env.n_neighborhood_cells):
+                features[f + 3] = n_agents_in_neighborhood[self.env.prey_type][f] / n_prey_in_neighborhood
+        return features
+
+
+TODO: make add_agent_to_grid(agent_name, location, iteration_rank)
+-matrix
+-add to name_list = agents
+-done[agent_name]= false
+-infos etc
+-matrix lists
+
+
+remove_agent_from_grid(agent_name):

@@ -1,0 +1,86 @@
+=========ISSUE 1==========
+agents = [predator_0, predator_1, predator_2, prey_3,
+prey_4, prey_5, grass_6, grass_7, grass_8]
+
+if predator_2 steps to and eats prey_3 ("next in line"),
+prey_3 gets unwantedly iterated again,
+leading to a key error (cause prey_3 is deleted).
+
+Example:
+
+predator_2 EATS prey_3
+_dones_order []
+getattr
+self._skip_agent_selection prey_3
+self.agent_selection prey_3
+done
+prey_3 steps next
+
+Traceback (most recent call last):
+  File "/home/doesburg/GDrive/git/rl-predator-prey-pz4/main.py", line 667, in <module>
+    observation, reward, done, info = env.last()
+  File "/home/doesburg/GDrive/git/rl-predator-prey-pz4/main.py", line 333, in last
+    agent_instance = self.instance(agent_name)
+  File "/home/doesburg/GDrive/git/rl-predator-prey-pz4/main.py", line 117, in instance
+    return self.agents_dict[agent_name]
+KeyError: 'prey_3'
+
+Process finished with exit code 1
+********
+
+
+Workaround in: "_dones_step_first(self)":
+
+            _dones_order = [agent for agent in self.agents if self.dones[agent]]
+            if _dones_order:
+                if self.agent_selection == _dones_order[0]:
+                    self._skip_agent_selection.next()
+                else:
+                    self._skip_agent_selection = self.agent_selection
+
+                self.agent_selection = _dones_order[0]
+            return self.agent_selection
+
+            INSTEAD OF:
+
+            _dones_order = [agent for agent in self.agents if self.dones[agent]]
+            if _dones_order:
+                self._skip_agent_selection = self.agent_selection
+                self.agent_selection = _dones_order[0]
+            return self.agent_selection
+
+
+=========END ISSUE 1==========
+=========ISSUE 2============
+Skips Grass_6 wrongly!
+EXAMPLE 1:
+(main,621), iteration, agent prey_3
+prey_3 DONE AND IS EATEN BY predator_2
+main, before 'next', step, 542 self.agent_selection prey_3
+     postponed: "_skip_agent_selection" prey_4
+     front loading 'done': self.agent_selection = _dones_order[0] = prey_3
+main, after 'next', step, 545 self.agent_selection prey_3
+(main,621), iteration, agent prey_3
+(main,621), iteration, agent prey_4
+main, before 'next', step, 542 self.agent_selection prey_4
+main, after 'next', step, 545 self.agent_selection *grass_7*
+(main,621), iteration, agent grass_7
+
+EXAMPLE 2:
+main,621), iteration, agent predator_2
+predator_2 IS EATING prey_3 WHO IS DONE
+main, before 'next', step, 542 self.agent_selection predator_2
+main, after 'next', step, 545 self.agent_selection prey_3
+     self._agent_selector.next() prey_4
+     postponed: "_skip_agent_selection" prey_4
+     front loading 'done': self.agent_selection = _dones_order[0] = prey_3
+(main,621), iteration, agent prey_3
+(main,621), iteration, agent prey_4
+main, before 'next', step, 542 self.agent_selection prey_4
+main, after 'next', step, 545 self.agent_selection grass_7
+(main,621), iteration, agent grass_7
+m
+=========END ISSUE 2==========
+Conclusion:
+Skipping the second next agent occurs when the current agent causes itself
+or the next in line to be "done"
