@@ -75,6 +75,10 @@ if __name__ == '__main__':
             if agent_instance.energy_level <= 0:
                 self.dones[agent_name] = True
                 print(agent_name + " HAS NO ENERGY LEFT AND IS DONE")
+
+            if self._agent_selector.is_last():
+                self._agent_selector.reinit(self.agents)
+
             self.agent_selection = self._agent_selector.next()
             self.agent_selection = self._dones_step_first()
 
