@@ -8,7 +8,7 @@ from pettingzoo.utils import agent_selector
 from prey import Prey
 from predator import Predator
 from grass import Grass
-import random
+# import random
 import time
 
 if __name__ == '__main__':
