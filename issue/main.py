@@ -1,5 +1,47 @@
 from pettingzoo import AECEnv
-from pettingzoo.utils import agent_selector
+
+class agent_selector:
+    """
+    Outputs an agent in the given order whenever agent_select is called. Can reinitialize to a new order
+    """
+
+    def __init__(self, agent_order):
+        self.reinit(agent_order)
+
+    def reinit(self, agent_order):
+        self.agent_order = agent_order
+        self._current_agent = 0
+        self.selected_agent = 0
+
+    def reset(self):
+        self.reinit(self.agent_order)
+        return self.next()
+
+    def next(self):
+        self._current_agent = (self._current_agent + 1) % len(self.agent_order)
+        self.selected_agent = self.agent_order[self._current_agent - 1]
+        return self.selected_agent
+
+    def is_last(self):
+        """
+        Does not work as expected if you change the order
+        """
+        return self.selected_agent == self.agent_order[-1]
+
+    def is_first(self):
+        return self.selected_agent == self.agent_order[0]
+
+    def __eq__(self, other):
+        if not isinstance(other, agent_selector):
+            return NotImplemented
+
+        return (
+            self.agent_order == other.agent_order
+            and self._current_agent == other._current_agent
+            and self.selected_agent == other.selected_agent
+        )
+
+
 
 if __name__ == '__main__':
 
@@ -65,6 +107,57 @@ if __name__ == '__main__':
         def render(self, mode="human"):
             print("iteration " + str(iter) + ": agent: " + str(agent))
 
+        def _was_done_step(self, action):
+            """
+            Helper function that performs step() for done agents.
+
+            Does the following:
+
+            1. Removes done agent from .agents, .dones, .rewards, ._cumulative_rewards, and .infos
+            2. Loads next agent into .agent_selection: if another agent is done, loads that one, otherwise load next live agent
+            3. Clear the rewards dict
+
+            Highly recommended to use at the beginning of step as follows:
+
+            def step(self, action):
+                if self.dones[self.agent_selection]:
+                    self._was_done_step()
+                    return
+                # main contents of step
+            """
+            if action is not None:
+                raise ValueError("when an agent is done, the only valid action is None")
+
+            # removes done agent
+            agent = self.agent_selection
+            assert self.dones[
+                agent
+            ], "an agent that was not done as attempted to be removed"
+            print("to be removed agent "+agent+" has array index: "+str(self.agents.index(agent))+" (='_current_agent' number minus 1)")
+            print("'_skip_agent_selection': "+self._skip_agent_selection +" has '_current_agent' number: "+str( self._agent_selector._current_agent)+" and array index "+str(self.agents.index("agent_3")))
+            del self.dones[agent]
+            del self.rewards[agent]
+            del self._cumulative_rewards[agent]
+            del self.infos[agent]
+            self.agents.remove(agent)
+            print("agent "+agent+" is removed from agents")
+            print("'_skip_agent_selection': "+self._skip_agent_selection +" has '_current_agent' number: "+str( self._agent_selector._current_agent)+" and array index "+str(self.agents.index("agent_3")))
+
+            if self.agents[self._agent_selector._current_agent-1] != self.agent_selection :
+                self._agent_selector._current_agent -= 1
+
+            # finds next done agent or loads next live agent (Stored in _skip_agent_selection)
+            _dones_order = [agent for agent in self.agents if self.dones[agent]]
+            if _dones_order:
+                if getattr(self, "_skip_agent_selection", None) is None:
+                    self._skip_agent_selection = self.agent_selection
+                self.agent_selection = _dones_order[0]
+            else:
+                if getattr(self, "_skip_agent_selection", None) is not None:
+                    self.agent_selection = self._skip_agent_selection
+                self._skip_agent_selection = None
+            self._clear_rewards()
+
         def step(self, action):
             if self.dones[self.agent_selection]:
                 self._was_done_step(action)
@@ -75,9 +168,6 @@ if __name__ == '__main__':
             if agent_instance.energy_level <= 0:
                 self.dones[agent_name] = True
                 print(agent_name + " HAS NO ENERGY LEFT AND IS DONE")
-
-            if self._agent_selector.is_last():
-                self._agent_selector.reinit(self.agents)
 
             self.agent_selection = self._agent_selector.next()
             self.agent_selection = self._dones_step_first()

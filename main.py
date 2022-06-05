@@ -8,31 +8,33 @@ from pettingzoo.utils import agent_selector
 from prey import Prey
 from predator import Predator
 from grass import Grass
+import random
+import time
 
 if __name__ == '__main__':
 
-    x_size = 7
+    x_size = 5
     # predators
-    n_initial_predators = 5
-    initial_energy_level_predators = 3
+    n_initial_predators = 3
+    initial_energy_level_predators = 6
 
-    predators_metabolism_energy = 0  # energy cost per time unit
-    predators_step_energy = 1  # energy cost per location step
+    predators_metabolism_energy = 0 # random.uniform(0, 2)  # energy cost per time unit
+    predators_step_energy = 0 # 1  # energy cost per location step
     predator_reproduction_rate = 0.1
     predator_reproduction_age = 10
     predator_death_rate = 0.019
 
-    n_initial_prey = 5
-    initial_energy_level_prey = 6
-    prey_metabolism_energy = 1
-    prey_step_energy = 1
+    n_initial_prey = 3
+    initial_energy_level_prey = 3
+    prey_metabolism_energy = 0 #random.uniform(0, 2)
+    prey_step_energy = 0 # 1
     prey_max_energy_consumption = 1  # maximum number of grass energy eaten if available
     prey_reproduction_rate = 0.1
     prey_reproduction_age = 8
     prey_death_rate = 0.05
 
-    n_initial_grass = 10
-    initial_energy_level_grass = 3
+    n_initial_grass = 3
+    initial_energy_level_grass = 2
     grass_reproduction_rate = 0.02
     grass_growth = 0  # energy increase per time unit (= full cycle)
 
@@ -130,7 +132,6 @@ if __name__ == '__main__':
                     old_y = predator.y
                     predator.x = new_x
                     predator.y = new_y
-                    print(agent_name+" moves from ["+str(old_x)+","+str(old_y)+"] to ["+str(new_x)+","+str(new_y)+"]")
                     self.n_agents_in_grid_cells[self.predator_type_nr][old_x, old_y] -= 1
                     self.n_agents_in_grid_cells[self.predator_type_nr][new_x, new_y] += 1
                     self.agents_lists_in_grid_cells[old_x][old_y][self.predator_type_nr].remove(predator)
@@ -141,7 +142,6 @@ if __name__ == '__main__':
                     old_y = prey.y
                     prey.x = new_x
                     prey.y = new_y
-                    print(agent_name+" moves from ["+str(old_x)+","+str(old_y)+"] to ["+str(new_x)+","+str(new_y)+"]")
                     self.n_agents_in_grid_cells[self.prey_type_nr][old_x, old_y] -= 1
                     self.n_agents_in_grid_cells[self.prey_type_nr][new_x, new_y] += 1
                     self.agents_lists_in_grid_cells[old_x][old_y][self.prey_type_nr].remove(prey)
@@ -149,14 +149,15 @@ if __name__ == '__main__':
                 case self.grass_type_nr:
                     return
 
+        def environment_done(self):
+            return not self.agents
+
         def remove_agent(self, agent_name):
             # removes agent
             agent_instance = self.instance(agent_name)
-            # print("main, 542, removes " + agent)
             assert self.dones[
                 agent_name
             ], "an agent that was not done as attempted to be removed"
-            print(agent_name+" IS REMOVED FROM RECORDS")
             del self.dones[agent_name]
             del self.rewards[agent_name]
             del self._cumulative_rewards[agent_name]
@@ -169,6 +170,8 @@ if __name__ == '__main__':
             self.agents_instance_list.remove(self.agents_dict[agent_name])
             self.agents_dict.pop(agent_name, None)
             self.n_active_agents[agent_instance.agent_type_nr] -= 1
+            print(agent_name+" is removed")
+            return self.agents
 
         def create_agent(self, agent_type_nr, x, y):
             match agent_type_nr:
@@ -305,49 +308,34 @@ if __name__ == '__main__':
             same = {0, 1} for if the opponent is on the same location
 
             """
-            # print("(main, 319) agent "+str(agent))
             if env.agents_dict[agent].agent_type_name == "predator":
                 type_animal = 1
                 n_agents_in_neighborhood = self.get_neighborhood_agents(agent)
                 if self.n_active_agents[self.prey_type_nr] != 0:
-                    # print("n_agents_in_neighborhood of agent "+ str(agent)+" at ["+str(env.agents_dict[
-                    # agent].location.x_position)+"," +str(env.agents_dict[agent].location.y_position)+"]") print(
-                    # n_agents_in_neighborhood)
-                    relative_prey = sum(n_agents_in_neighborhood[self.prey_type_nr][
+                     relative_prey = sum(n_agents_in_neighborhood[self.prey_type_nr][
                                         :]) / self.n_active_agents[self.prey_type_nr]
 
                 else:
                     relative_prey = 0
-                # print("relative_prey (= opponent): "+str(relative_prey))
                 opponent = relative_prey
                 center_position = int((self.n_neighborhood_cells - 1) / 2)
                 # also prey in center position
                 same = n_agents_in_neighborhood[self.prey_type_nr][center_position] > 0
-                # print("same: "+str(same*1))
                 reward = opponent * type_animal + 2 * same * type_animal
-                # print("reward (predator): " + str(reward))
 
             elif env.agents_dict[agent].agent_type_name == "prey":
                 type_animal = -1
                 n_agents_in_neighborhood = self.get_neighborhood_agents(agent)
                 if self.n_active_agents[self.predator_type_nr] != 0:
-                    # print("n_agents_in_neighborhood of agent "+ str(agent)+" at ["+str(env.agents_dict[
-                    # agent].location.x_position)+"," +str(env.agents_dict[agent].location.y_position)+"]") print(
-                    # n_agents_in_neighborhood)
                     relative_predators = sum(n_agents_in_neighborhood[self.predator_type_nr][
                                              :]) / self.n_active_agents[self.predator_type_nr]
-                    # print(sum(n_agents_in_neighborhood[self.predator_type_nr][:]))
-                    # print(self.n_active_agents[self.predator_type_nr])
                 else:
                     relative_predators = 0
-                # print("relative_predators (= opponent): " + str(relative_predators))
                 opponent = relative_predators
                 center_position = int((self.n_neighborhood_cells - 1) / 2)
                 # also predator(s) in same (center) position as prey
                 same = n_agents_in_neighborhood[self.predator_type_nr][center_position] > 0
-                # print("same: "+str(same*1))
                 reward = opponent * type_animal + 2 * same * type_animal
-                # print("reward (prey): " + str(reward))
             else:  # predator nor prey i.e. grass
                 reward = 0
             return reward
@@ -389,7 +377,6 @@ if __name__ == '__main__':
             return current_state
 
         def render(self, mode="human"):
-            # print("(environment, 438): begin 'render()'")
             self.screen = pygame.display.set_mode(
                 (self.pixel_scale * self.x_size, self.pixel_scale * self.x_size))
             # draw grid
@@ -422,9 +409,6 @@ if __name__ == '__main__':
                     text = font.render(count_text, False, prey_color)
                     self.screen.blit(text, (pos_x, pos_y))
                     predator_count = np.transpose(observation[self.predator_type_nr])[j][i]
-                    # predator_count = len(self.agents_lists_in_grid_cells[i][j][
-                    #    self.predator_type_nr])
-                    # print("predator_count " + str(predator_count))
                     count_text: str
                     if predator_count < 1:
                         count_text = ""
@@ -462,16 +446,24 @@ if __name__ == '__main__':
                     pos = pygame.Rect(self.pixel_scale * x + 6, self.pixel_scale * y + 6,
                                       self.pixel_scale - 12, self.pixel_scale - 12)
                     pygame.draw.rect(self.screen, grass_color, pos, 10)
-                    # print("(x,y)= (" + str(x) + "," + str(y) + ")")
 
             pygame.display.update()
-                # input('Press any key to exit\n')
 
         def step(self, action):
             if self.dones[self.agent_selection]:
+                # to fix a runtime error when self._skip_agent_selection is already being "done"
+                # and deleted by the selected agent: see 3)
+                if self.agent_selection == self._skip_agent_selection:
+                    self._skip_agent_selection = self._agent_selector.next()
+                    return
                 self._was_done_step(action)
-                self._agent_selector._current_agent = self.agents.index(self._agent_selector.selected_agent) + 1
+                # to fix changing array indexes when the selected agent
+                # deletes an earlier agent in the agent order (agents): see 1)
+                # and to fix when the selected agent deltes itself: see 2)
+                if self.agents[self._agent_selector._current_agent - 1] != self.agent_selection:
+                    self._agent_selector._current_agent -= 1
                 return
+            # main contents of step
             agent_name = self.agent_selection
             agent_instance = self.instance(agent_name)
             match agent_instance.agent_type_nr:
@@ -483,7 +475,7 @@ if __name__ == '__main__':
                                               (predator.x + env.actions_positions_dict[action][0]) % self.x_size,
                                               (predator.y + env.actions_positions_dict[action][1]) % self.x_size)
                     if not action == 4:  # 4 is no-move
-                        predator.energy_level -= np.random.uniform(0, 1)  #,self.predators_step_energy
+                        predator.energy_level -= self.predators_step_energy
 
                     prey_list_at_new_predator_location = self.agents_lists_in_grid_cells[predator.x][
                         predator.y][self.prey_type_nr]
@@ -493,16 +485,13 @@ if __name__ == '__main__':
                         eaten_prey_index = np.random.randint(0, len(prey_list_at_new_predator_location))
                         eaten_prey_instance = prey_list_at_new_predator_location[eaten_prey_index]
                         predator.energy_level += eaten_prey_instance.energy_level
-                        # print(predator.agent_name + " EATS " + eaten_prey_instance.agent_name)
                         if not self.dones[eaten_prey_instance.agent_name]:
                             predator.energy_level += eaten_prey_instance.energy_level
-                            print(predator.agent_name + " IS EATING " + eaten_prey_instance.agent_name +
-                                  " @ ["+str(predator.x)+","+str(predator.y)+"]")
+                            print(predator.agent_name + " is eating " + eaten_prey_instance.agent_name)
                             self.dones[eaten_prey_instance.agent_name] = True
-                        # print(self.dones)
                     if predator.energy_level <= 0:
                         self.dones[agent_name] = True
-                        print(agent_name + " HAS NO ENERGY LEFT AND IS DONE @ ["+str(predator.x)+","+str(predator.y)+"]")
+                        print(agent_name + " HAS NO ENERGY LEFT AND IS DONE")
 
                 case self.prey_type_nr:
                     prey = agent_instance
@@ -512,7 +501,7 @@ if __name__ == '__main__':
                                               (prey.x + env.actions_positions_dict[action][0]) % self.x_size,
                                               (prey.y + env.actions_positions_dict[action][1]) % self.x_size)
                     if not action == 4:  # 4 is no-move
-                        prey.energy_level -= np.random.uniform(0, 1)  #self.prey_step_energy
+                        prey.energy_level -= self.prey_step_energy
                     # predator available at new prey location?
                     predator_list_at_new_prey_location = self.agents_lists_in_grid_cells[prey.x][
                         prey.y][self.predator_type_nr]
@@ -522,32 +511,27 @@ if __name__ == '__main__':
                         eating_predator_instance = predator_list_at_new_prey_location[eating_predator_index]
                         eating_predator_instance.energy_level += prey.energy_level
                         self.dones[prey.agent_name] = True
-                        print(eating_predator_instance.agent_name + " IS EATING " + prey.agent_name +
-                              " @ ["+str(prey.x)+","+str(prey.y)+"]")
+                        print(eating_predator_instance.agent_name + " is eating " + prey.agent_name)
                     if not self.dones[prey.agent_name]:
                         # grass available at new prey location?
-                        grass_at_new_predator_location = self.agents_lists_in_grid_cells[prey.x][
+                        grass_at_new_prey_location = self.agents_lists_in_grid_cells[prey.x][
                             prey.y][self.grass_type_nr]
 
-                        if len(grass_at_new_predator_location) > 0:
-                            grass_instance = grass_at_new_predator_location[0]
-                            # print("prey.energy_level before eating grass " + str(prey.energy_level))
-                            # print("grass.energy_level before being eated " + str(grass_instance.energy_level))
+                        if len(grass_at_new_prey_location) > 0:
+                            grass_instance = grass_at_new_prey_location[0]
                             prey_real_energy_consumption = min(self.prey_max_energy_consumption,
                                                                grass_instance.energy_level)
                             prey.energy_level += prey_real_energy_consumption
                             grass_instance.energy_level -= prey_real_energy_consumption
-                            # print("prey.energy_level after eating grass " + str(prey.energy_level))
-                            # print("grass.energy_level after being eated " + str(grass_instance.energy_level))
                             if not grass_instance.energy_level > 0:
                                 self.dones[grass_instance.agent_name] = True
-                                print(prey.agent_name + " IS EATING " + grass_instance.agent_name + " @ ["+str(prey.x)+","+str(prey.y)+"], GRASS DIES")
+                                print(prey.agent_name + " is eating " + grass_instance.agent_name + ", grass dies")
                             else:
-                                print(prey.agent_name + " IS EATING " + grass_instance.agent_name + " @ ["+str(prey.x)+","+str(prey.y)+
-                                      "], GRASS SURVIVES WITH "+str(grass_instance.energy_level)+" ENERGY LEFT")
-                    if prey.energy_level <= 0:
+                                print()
+                                print(prey.agent_name + " is eating " + grass_instance.agent_name + ", grass stays alive")
+                    if prey.energy_level <= 0 and not self.dones[prey.agent_name]:
                         self.dones[prey.agent_name] = True
-                        print(prey.agent_name + " HAS NO ENERGY LEFT AND IS DONE @ ["+str(prey.x)+","+str(prey.y)+"]")
+                        print(prey.agent_name + " has no energy left and is done")
                 case self.grass_type_nr:
                     grass = agent_instance
                     grass.energy_level += self.grass_growth
@@ -557,16 +541,19 @@ if __name__ == '__main__':
 
         def _was_done_step(self, action):
             """
-             1. Removes done agent from .agents, .dones, .rewards, ._cumulative_rewards, and .infos
-             2. Loads next agent into .agent_selection: if another agent is done, loads that one,
-             otherwise load next live agent 3. Clear the rewards dict
+            Helper function that performs step() for done agents.
 
-            Highly recommended to use at the beginning of step() as follows:
+            Does the following:
+
+            1. Removes done agent from .agents, .dones, .rewards, ._cumulative_rewards, and .infos
+            2. Loads next agent into .agent_selection: if another agent is done, loads that one, otherwise load next live agent
+            3. Clear the rewards dict
+
+            Highly recommended to use at the beginning of step as follows:
 
             def step(self, action):
                 if self.dones[self.agent_selection]:
                     self._was_done_step()
-                    self._agent_selector._current_agent = self.agents.index(self._agent_selector.selected_agent) + 1
                     return
                 # main contents of step
             """
@@ -578,6 +565,7 @@ if __name__ == '__main__':
             assert self.dones[
                 agent_name
             ], "an agent that was not done as attempted to be removed"
+            print("FRONT LOADING")
             self.remove_agent(agent_name)
 
             # finds next done agent or loads next live agent (Stored in _skip_agent_selection)
@@ -592,7 +580,6 @@ if __name__ == '__main__':
                 self._skip_agent_selection = None
             self._clear_rewards()
 
-
     def policy(observation, agent):
         # observation_space = env.observation_spaces(agent)
         action = None
@@ -604,13 +591,6 @@ if __name__ == '__main__':
 
         elif env.agents_dict[agent].agent_type_name == "grass":
             action = 4
-        """
-        print("env.n_active_agents[self.predator_type_nr]")
-        print(env.n_active_agents[self.predator_type_nr])
-        action_space = env.action_space(agent)
-        print("(main, 120) action")
-        print(action)  # number in range [0..8]
-        """
         return action
 
 
@@ -621,16 +601,20 @@ if __name__ == '__main__':
 
     env.reset()
     iter = 0
-    time = 0
-    for agent in env.agent_iter(500):
+    cycle = 0
+    for agent in env.agent_iter(100):
+        #if env.environment_done():
+        #    break
         if env._agent_selector.is_first():
-            time += 1
-            print("time is "+str(time))
+            cycle += 1
+            print("cycle "+str(cycle))
         print("iteration "+str(iter)+", agent " + str(agent))
+        print(env.agents)
         observation, reward, done, info = env.last()
         action = policy(observation, agent) if not done else None
         env.step(action)
         env.render()
+        time.sleep(0)
         print()
         iter += 1
 
