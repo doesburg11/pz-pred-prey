@@ -4,27 +4,24 @@ Basically an implementation with modifications of the paper:
 
 “An Agent-Based Predator-Prey Model with Reinforcement Learning” by  M. Olsen and R. Fraczkowski.
 
-## Installation
+### PettingZoo
+This implementation does use the PettinZoo library for strictly AEC turned
+actiom behavior of the various agents (predators, Prey, Grass).
 
-### Prerequisites
-- Python 3.6
+Behavior predators: 
+- moving to Mooreneigh borhood (choice)
+- eating prey (automaticy)
+- metabolisme energy by aging (automaticly)
+- metabolism energy bij moving (choice)
+- reproduce (automticly above treshold energy level)
 
-```bash
-pip install -r requirements.txt
-```
-- Clone this repo:
-```bash
-git clone https://github.com/doesburg11/rl-predator-prey
-cd rl-predator-prey
-```
+### System Info
+- Python 3.10
+- Conda environment
+- Linux Mint 20.3 Cinnamon
+- IDE: DataSpell 2022.1
 
-### Run the Simulation
-Just start the simulation by launching the main program. It is possible to change the default standards (look at the main file for more information)
-```bash
-python main.py --gridDim 70 --nGrass 1400
-```
 ### References
 
-- https://andrearamazzina.com/2018/02/05/reinforcement-learning-in-a-predator-prey-model/
 - https://github.com/andrearama/PredatorPreyReinfLearning/
 - [documents](docs/)

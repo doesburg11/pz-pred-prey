@@ -93,7 +93,7 @@ if __name__ == '__main__':
         def reset(self, seed=None):
             for _ in range(6):
                 self.create_agent()
-            self._agent_selector = agent_selector(self.agents)
+            self._agent_selector = agent_selector(list(self.agents))
             self.agent_selection = self._agent_selector.next()
 
         def last(self, observe=True):
@@ -129,19 +129,16 @@ if __name__ == '__main__':
                 raise ValueError("when an agent is done, the only valid action is None")
 
             # removes done agent
-            agent = self.agent_selection
+            agent_name = self.agent_selection
             assert self.dones[
-                agent
+                agent_name
             ], "an agent that was not done as attempted to be removed"
-            print("to be removed agent "+agent+" has array index: "+str(self.agents.index(agent))+" (='_current_agent' number minus 1)")
-            print("'_skip_agent_selection': "+self._skip_agent_selection +" has '_current_agent' number: "+str( self._agent_selector._current_agent)+" and array index "+str(self.agents.index("agent_3")))
-            del self.dones[agent]
-            del self.rewards[agent]
-            del self._cumulative_rewards[agent]
-            del self.infos[agent]
-            self.agents.remove(agent)
-            print("agent "+agent+" is removed from agents")
-            print("'_skip_agent_selection': "+self._skip_agent_selection +" has '_current_agent' number: "+str( self._agent_selector._current_agent)+" and array index "+str(self.agents.index("agent_3")))
+            del self.dones[agent_name]
+            del self.rewards[agent_name]
+            del self._cumulative_rewards[agent_name]
+            del self.infos[agent_name]
+            self.agents.remove(agent_name)
+            print("agent "+agent_name+" removed")
 
             if self.agents[self._agent_selector._current_agent-1] != self.agent_selection :
                 self._agent_selector._current_agent -= 1
@@ -168,6 +165,9 @@ if __name__ == '__main__':
             if agent_instance.energy_level <= 0:
                 self.dones[agent_name] = True
                 print(agent_name + " HAS NO ENERGY LEFT AND IS DONE")
+                self._agent_selector.agent_order.remove(agent_name)
+                self._agent_selector._current_agent -= 1
+                self._agent_selector._current_agent %= len(self._agent_selector.agent_order)
 
             self.agent_selection = self._agent_selector.next()
             self.agent_selection = self._dones_step_first()
@@ -180,6 +180,8 @@ if __name__ == '__main__':
     env = test_env()
 
     env.reset()
+    print(env.agents)
+    print(list(env.agents))
     iter = 0
     for agent in env.agent_iter(25):
         env.render()

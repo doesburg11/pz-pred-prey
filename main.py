@@ -13,30 +13,38 @@ import time
 
 if __name__ == '__main__':
 
-    x_size = 5
-    # predators
-    n_initial_predators = 3
-    initial_energy_level_predators = 6
+    x_size = 7
+    n_iterations = 1000
 
-    predators_metabolism_energy = 0 # random.uniform(0, 2)  # energy cost per time unit
-    predators_step_energy = 0 # 1  # energy cost per location step
-    predator_reproduction_rate = 0.1
-    predator_reproduction_age = 10
-    predator_death_rate = 0.019
+    n_initial_predators = 5
+    n_initial_prey = 10
+    n_initial_grass = 20
 
-    n_initial_prey = 3
-    initial_energy_level_prey = 3
-    prey_metabolism_energy = 0 #random.uniform(0, 2)
-    prey_step_energy = 0 # 1
-    prey_max_energy_consumption = 1  # maximum number of grass energy eaten if available
+    initial_energy_level_predators = 5
+    initial_energy_level_prey = 4
+    initial_energy_level_grass = 2
+
+    predators_metabolism_energy = 0.5
+    prey_metabolism_energy = 0.2  # random.uniform(0, 2)
+    predators_step_energy = 0.1
+    prey_step_energy = 0.1  # 1
+    predators_reproduction_energy_minimum = 5
+    prey_reproduction_energy_minimum = 4
+    grass_reproduction_energy_minimum = 2.5
+    grass_growth = 0.1
+    prey_max_energy_consumption = 1.5  # maximum number of grass energy eaten if available
+
+    predators_reproduction_rate = 0.1
+    predators_reproduction_age = 10
+    predators_death_rate = 0.019
+    predators_cost_of_reproduction = 4
+
     prey_reproduction_rate = 0.1
     prey_reproduction_age = 8
     prey_death_rate = 0.05
+    prey_cost_of_reproduction = 1
 
-    n_initial_grass = 3
-    initial_energy_level_grass = 2
-    grass_reproduction_rate = 0.02
-    grass_growth = 0  # energy increase per time unit (= full cycle)
+    grass_reproduction_rate = 0.02  # energy increase per time unit (= full cycle)
 
     n_max_cycles = 10
     n_learning_iterations = 100
@@ -44,9 +52,12 @@ if __name__ == '__main__':
     import os
     x = 1280
     y = 0
+    sleep_time = 0.2
     os.environ['SDL_VIDEO_WINDOW_POS'] = "%d,%d" % (x, y)
 
     pygame.init()  # Initializing Pygame
+
+
 
 
     class PredatorPreyGridEnv(AECEnv):  # noqa
@@ -58,6 +69,7 @@ if __name__ == '__main__':
         def __init__(self, x_size, n_initial_predators, n_initial_prey, n_initial_grass):
 
             super().__init__()
+            self._skip_agent_selection = None
             self.x_size = x_size
             self.n_initial_predators = n_initial_predators
             self.n_initial_prey = n_initial_prey
@@ -110,20 +122,38 @@ if __name__ == '__main__':
 
             self.predators_metabolism_energy = predators_metabolism_energy
             self.predators_step_energy = predators_step_energy
+            self.predators_reproduction_energy_minimum = predators_reproduction_energy_minimum
+            self.predators_cost_of_reproduction = predators_cost_of_reproduction
 
             self.prey_max_energy_consumption = prey_max_energy_consumption
             self.prey_metabolism_energy = prey_metabolism_energy
             self.prey_step_energy = prey_step_energy
+            self.prey_reproduction_energy_minimum = prey_reproduction_energy_minimum
+            self.prey_cost_of_reproduction = prey_cost_of_reproduction
 
             self.grass_growth = grass_growth
+            self.grass_reproduction_energy_minimum = grass_reproduction_energy_minimum
 
             self.pixel_scale = 100
+            self.n_iterations = n_iterations
             self.screen = None
 
         def instance(self, agent_name):
             return self.agents_dict[agent_name]
 
-        def step_to_new_location(self, agent_name, new_x, new_y):
+        def step_energy(self, agent_name, action):
+            step_energy = 0
+            if action == 4:  # no move
+                return step_energy
+            agent_instance = self.instance(agent_name)
+            match agent_instance.agent_type_nr:
+                case self.predator_type_nr:
+                    step_energy = self.predators_step_energy
+                case self.predator_type_nr:
+                    step_energy = self.prey_step_energy
+            return step_energy
+
+        def move_agent(self, agent_name, new_x, new_y):
             agent_instance = self.instance(agent_name)
             match agent_instance.agent_type_nr:
                 case self.predator_type_nr:
@@ -149,8 +179,14 @@ if __name__ == '__main__':
                 case self.grass_type_nr:
                     return
 
-        def environment_done(self):
-            return not self.agents
+        def execute_action_selected_agent(self, action):
+            agent_name = self.agent_selection
+            agent_instance = self.instance(agent_name)
+            self.move_agent(agent_instance.agent_name,
+                            (agent_instance.x + self.actions_positions_dict[action][0]) % self.x_size,
+                            (agent_instance.y + self.actions_positions_dict[action][1]) % self.x_size)
+            step_energy = self.step_energy(agent_name, action)
+            return step_energy
 
         def remove_agent(self, agent_name):
             # removes agent
@@ -174,6 +210,7 @@ if __name__ == '__main__':
             return self.agents
 
         def create_agent(self, agent_type_nr, x, y):
+            agent_name = None
             match agent_type_nr:
                 case self.predator_type_nr:
                     predator = Predator(x, y, self.id_nr)
@@ -232,6 +269,7 @@ if __name__ == '__main__':
                     self._cumulative_rewards[agent_name] = 0
                     self.infos[agent_name] = {}
                     self.id_nr += 1
+            return agent_name
 
         def get_random_location(self, seed=None):
             # TODO: research implementation seed
@@ -268,6 +306,26 @@ if __name__ == '__main__':
 
                     moore_index += 1
             return n_agents_in_neighborhood
+
+        def get_empty_grass_moore_index(self):
+            grass_instance = self.instance(self.agent_selection)
+            x = grass_instance.x
+            y = grass_instance.y
+            possible_grass_offspring_moore_index_list = []
+            moore_index = 0
+            for d_x in self.relative_x_positions_neighbors:
+                for d_y in self.relative_y_positions_neighbors:
+                    x_neighbor_location = (x + d_x) % x_size
+                    y_neighbor_location = (y + d_y) % x_size
+                    if self.n_agents_in_grid_cells[self.grass_type_nr][x_neighbor_location, y_neighbor_location] == 1:
+                        possible_grass_offspring_moore_index_list.append(moore_index)
+                    moore_index += 1
+
+            if possible_grass_offspring_moore_index_list:
+                random_moore_index = np.random.randint(0, len(possible_grass_offspring_moore_index_list))
+            else:
+                random_moore_index = None
+            return random_moore_index
 
         def get_features(self, agent):
             """
@@ -312,7 +370,7 @@ if __name__ == '__main__':
                 type_animal = 1
                 n_agents_in_neighborhood = self.get_neighborhood_agents(agent)
                 if self.n_active_agents[self.prey_type_nr] != 0:
-                     relative_prey = sum(n_agents_in_neighborhood[self.prey_type_nr][
+                    relative_prey = sum(n_agents_in_neighborhood[self.prey_type_nr][
                                         :]) / self.n_active_agents[self.prey_type_nr]
 
                 else:
@@ -365,7 +423,6 @@ if __name__ == '__main__':
 
         def last(self, observe=True):
             agent_name = self.agent_selection
-            agent_instance = self.instance(agent_name)
             done = self.dones[agent_name]
             info = self.infos[agent_name]
             reward = self.get_reward(agent_name)
@@ -390,8 +447,7 @@ if __name__ == '__main__':
                 for j in range(self.x_size):
                     pos = pygame.Rect(self.pixel_scale * i, self.pixel_scale * j,
                                       self.pixel_scale, self.pixel_scale)
-                    #pygame.draw.rect(self.screen, grid_color, pos, 3)
-                    pygame.draw.rect(self.screen, grid_border_color,pos, 3)
+                    pygame.draw.rect(self.screen, grid_border_color, pos, 3)
             # draw agent counts
             font = pygame.font.SysFont('Comic Sans MS', self.pixel_scale * 2 // 5)
             for i in range(self.x_size):
@@ -420,121 +476,144 @@ if __name__ == '__main__':
                     self.screen.blit(text, (pos_x, pos_y - self.pixel_scale // 2))
             # draw agents
             for agent in self.agents_instance_list:
+                scale = 1
+                if agent.agent_name == self.agent_selection:
+                    scale = 2
                 x = agent.x
                 y = agent.y
                 if agent.agent_type_name == "predator":
+
                     center = (int(self.pixel_scale * x + self.pixel_scale / 2),
                               int(self.pixel_scale * y + self.pixel_scale / 2))
                     pygame.draw.circle(self.screen, predator_color, center,
-                                       int(self.pixel_scale / 4))
+                                       int(self.pixel_scale*scale / 4))
+                    # id_nr
                     text = font.render(str(agent.id_nr), False, (255, 255, 225))
-                    center_id = (int(self.pixel_scale * x + self.pixel_scale/ 2.2),
-                              int(self.pixel_scale * y + self.pixel_scale / 2.5))
+                    size_id_nr = len(str(agent.id_nr))
+                    center_id = (int(self.pixel_scale * x + self.pixel_scale / (2+(size_id_nr*5)/10)),
+                                 int(self.pixel_scale * y + self.pixel_scale / 2.5))
                     self.screen.blit(text, center_id)
 
                 elif agent.agent_type_name == "prey":
+
                     center = (int(self.pixel_scale * x + self.pixel_scale / 2),
                               int(self.pixel_scale * y + self.pixel_scale / 2))
                     pygame.draw.circle(self.screen, prey_color, center,
-                                       int(self.pixel_scale / 4))
+                                       int(self.pixel_scale*scale / 4))
                     text = font.render(str(agent.id_nr), False, (255, 255, 225))
-                    center_id = (int(self.pixel_scale * x + self.pixel_scale/ 2.2),
-                              int(self.pixel_scale * y + self.pixel_scale / 2.5))
+                    size_id_nr = len(str(agent.id_nr))
+                    center_id = (int(self.pixel_scale * x + self.pixel_scale / (2+(size_id_nr*5)/10)),
+                                 int(self.pixel_scale * y + self.pixel_scale / 2.5))
                     self.screen.blit(text, center_id)
                 elif agent.agent_type_name == "grass":
                     # color='lightgreen'
                     pos = pygame.Rect(self.pixel_scale * x + 6, self.pixel_scale * y + 6,
                                       self.pixel_scale - 12, self.pixel_scale - 12)
-                    pygame.draw.rect(self.screen, grass_color, pos, 10)
+                    pygame.draw.rect(self.screen, grass_color, pos, 10*scale)
 
             pygame.display.update()
 
+        def get_random_agent(self, agent_type_nr, x, y):
+            agent_instance = None
+            match agent_type_nr:
+                case self.prey_type_nr:
+                    prey_list = self.agents_lists_in_grid_cells[x][y][self.prey_type_nr]
+                    # prey available at new predator location?
+                    if prey_list:
+                        random_prey_index = np.random.randint(0, len(prey_list))
+                        agent_instance = prey_list[random_prey_index]
+                case self.grass_type_nr:
+                    grass_list = self.agents_lists_in_grid_cells[x][y][self.grass_type_nr]
+                    # grass available at new prey location?
+                    if grass_list:
+                        agent_instance = grass_list[0]
+            return agent_instance
+
         def step(self, action):
             if self.dones[self.agent_selection]:
+                """
+                the sequence of living agents can give rise to unexpected behavior 
+                in the following cases of "done" and subsequent removal:
+
+                    1) the selected agent causes another agent to "done" wher the other agent has 
+                    already been selected earlier in the agent_order of the same cycle,
+                    2) the selected agent causes itself to "done" (see earlier example)
+                    3) the selected agents causes its direct successor in the agent_order to "done".
+                """
                 # to fix a runtime error when self._skip_agent_selection is already being "done"
                 # and deleted by the selected agent: see 3)
                 if self.agent_selection == self._skip_agent_selection:
                     self._skip_agent_selection = self._agent_selector.next()
-                    return
                 self._was_done_step(action)
                 # to fix changing array indexes when the selected agent
                 # deletes an earlier agent in the agent order (agents): see 1)
                 # and to fix when the selected agent deltes itself: see 2)
-                if self.agents[self._agent_selector._current_agent - 1] != self.agent_selection:
+                if self.agents and self.agents[self._agent_selector._current_agent - 1] != \
+                        self.agent_selection:
                     self._agent_selector._current_agent -= 1
                 return
             # main contents of step
-            agent_name = self.agent_selection
-            agent_instance = self.instance(agent_name)
+            agent_instance = self.instance(self.agent_selection)
             match agent_instance.agent_type_nr:
                 case self.predator_type_nr:
                     predator = agent_instance
                     predator.age += 1
                     predator.energy_level -= self.predators_metabolism_energy
-                    self.step_to_new_location(predator.agent_name,
-                                              (predator.x + env.actions_positions_dict[action][0]) % self.x_size,
-                                              (predator.y + env.actions_positions_dict[action][1]) % self.x_size)
-                    if not action == 4:  # 4 is no-move
-                        predator.energy_level -= self.predators_step_energy
-
-                    prey_list_at_new_predator_location = self.agents_lists_in_grid_cells[predator.x][
-                        predator.y][self.prey_type_nr]
-                    # prey available at new predator location?
-                    if len(prey_list_at_new_predator_location) > 0:
-                        # predator eats prey at new location (random prey if more prey is present)
-                        eaten_prey_index = np.random.randint(0, len(prey_list_at_new_predator_location))
-                        eaten_prey_instance = prey_list_at_new_predator_location[eaten_prey_index]
-                        predator.energy_level += eaten_prey_instance.energy_level
-                        if not self.dones[eaten_prey_instance.agent_name]:
-                            predator.energy_level += eaten_prey_instance.energy_level
-                            print(predator.agent_name + " is eating " + eaten_prey_instance.agent_name)
-                            self.dones[eaten_prey_instance.agent_name] = True
+                    predator.energy_level -= self.execute_action_selected_agent(action)
                     if predator.energy_level <= 0:
-                        self.dones[agent_name] = True
-                        print(agent_name + " HAS NO ENERGY LEFT AND IS DONE")
+                        self.dones[predator.agent_name] = True
+                        print(predator.agent_name + " has no energy left and is done")
+                    elif predator.energy_level <= self.predators_reproduction_energy_minimum:
+                        eaten_prey_instance = self.get_random_agent(self.prey_type_nr, predator.x, predator.y)
+                        if eaten_prey_instance:
+                            self.dones[eaten_prey_instance.agent_name] = True
+                            predator.energy_level += eaten_prey_instance.energy_level
+                            print(predator.agent_name + " is eating " + eaten_prey_instance.agent_name +
+                                  " and has energy-level "+str(predator.energy_level))
+                    elif predator.energy_level > self.predators_reproduction_energy_minimum:
+                        # energy level above "predators_reproduction_energy_minimum"
+                        predator.energy_level -= self.predators_cost_of_reproduction
+                        new_predator_name = self.create_agent(self.predator_type_nr, predator.x, predator.y)
+                        print(new_predator_name+" created from "+ predator.agent_name)
 
                 case self.prey_type_nr:
                     prey = agent_instance
                     prey.age += 1
                     prey.energy_level -= self.prey_metabolism_energy
-                    self.step_to_new_location(prey.agent_name,
-                                              (prey.x + env.actions_positions_dict[action][0]) % self.x_size,
-                                              (prey.y + env.actions_positions_dict[action][1]) % self.x_size)
-                    if not action == 4:  # 4 is no-move
-                        prey.energy_level -= self.prey_step_energy
-                    # predator available at new prey location?
-                    predator_list_at_new_prey_location = self.agents_lists_in_grid_cells[prey.x][
-                        prey.y][self.predator_type_nr]
-                    if len(predator_list_at_new_prey_location) > 0:
-                        #prey eaten by a predator (random predator if more than one predator present)
-                        eating_predator_index = np.random.randint(0, len(predator_list_at_new_prey_location))
-                        eating_predator_instance = predator_list_at_new_prey_location[eating_predator_index]
-                        eating_predator_instance.energy_level += prey.energy_level
-                        self.dones[prey.agent_name] = True
-                        print(eating_predator_instance.agent_name + " is eating " + prey.agent_name)
-                    if not self.dones[prey.agent_name]:
-                        # grass available at new prey location?
-                        grass_at_new_prey_location = self.agents_lists_in_grid_cells[prey.x][
-                            prey.y][self.grass_type_nr]
-
-                        if len(grass_at_new_prey_location) > 0:
-                            grass_instance = grass_at_new_prey_location[0]
-                            prey_real_energy_consumption = min(self.prey_max_energy_consumption,
-                                                               grass_instance.energy_level)
-                            prey.energy_level += prey_real_energy_consumption
-                            grass_instance.energy_level -= prey_real_energy_consumption
-                            if not grass_instance.energy_level > 0:
-                                self.dones[grass_instance.agent_name] = True
-                                print(prey.agent_name + " is eating " + grass_instance.agent_name + ", grass dies")
-                            else:
-                                print()
-                                print(prey.agent_name + " is eating " + grass_instance.agent_name + ", grass stays alive")
-                    if prey.energy_level <= 0 and not self.dones[prey.agent_name]:
+                    prey.energy_level -= self.execute_action_selected_agent(action)
+                    if prey.energy_level <= 0:
                         self.dones[prey.agent_name] = True
                         print(prey.agent_name + " has no energy left and is done")
+                    elif prey.energy_level <= self.prey_reproduction_energy_minimum:
+                        # grass available for prey with positive energy level?
+                        eaten_grass_instance = self.get_random_agent(self.grass_type_nr, prey.x, prey.y)
+                        if eaten_grass_instance:
+                            prey_real_energy_consumption = min(self.prey_max_energy_consumption,
+                                                               eaten_grass_instance.energy_level)
+                            prey.energy_level += prey_real_energy_consumption
+                            eaten_grass_instance.energy_level -= prey_real_energy_consumption
+                            if eaten_grass_instance.energy_level <= 0:
+                                self.dones[eaten_grass_instance.agent_name] = True
+                                print(prey.agent_name + " is eating " + eaten_grass_instance.agent_name +
+                                      " and has energy-level " + str(prey.energy_level) + ", grass dies ")
+                            else:
+                                print(prey.agent_name + " is eating " + eaten_grass_instance.agent_name +
+                                      " and has energy-level " + str(prey.energy_level) + ", grass stays alive")
+                    elif prey.energy_level > self.prey_reproduction_energy_minimum:
+                        prey.energy_level -= self.prey_cost_of_reproduction
+                        new_prey_name = self.create_agent(self.prey_type_nr, prey.x, prey.y)
+                        print(new_prey_name+" created from " + prey.agent_name)
+
                 case self.grass_type_nr:
                     grass = agent_instance
                     grass.energy_level += self.grass_growth
+                    if grass.energy_level > self.grass_reproduction_energy_minimum \
+                            and self.get_empty_grass_moore_index():
+                        moore_index = self.get_empty_grass_moore_index()
+                        x = (grass.x + self.actions_positions_dict[moore_index][0]) % self.x_size
+                        y = (grass.y + self.actions_positions_dict[moore_index][1]) % self.x_size
+                        new_grass_name = self.create_agent(self.grass_type_nr, x, y)
+                        print(new_grass_name+" created")
 
             self.agent_selection = self._agent_selector.next()
             self.agent_selection = self._dones_step_first()
@@ -542,20 +621,6 @@ if __name__ == '__main__':
         def _was_done_step(self, action):
             """
             Helper function that performs step() for done agents.
-
-            Does the following:
-
-            1. Removes done agent from .agents, .dones, .rewards, ._cumulative_rewards, and .infos
-            2. Loads next agent into .agent_selection: if another agent is done, loads that one, otherwise load next live agent
-            3. Clear the rewards dict
-
-            Highly recommended to use at the beginning of step as follows:
-
-            def step(self, action):
-                if self.dones[self.agent_selection]:
-                    self._was_done_step()
-                    return
-                # main contents of step
             """
             if action is not None:
                 raise ValueError("when an agent is done, the only valid action is None")
@@ -602,19 +667,17 @@ if __name__ == '__main__':
     env.reset()
     iter = 0
     cycle = 0
-    for agent in env.agent_iter(100):
-        #if env.environment_done():
-        #    break
+    for agent in env.agent_iter(env.n_iterations):
         if env._agent_selector.is_first():
             cycle += 1
             print("cycle "+str(cycle))
-        print("iteration "+str(iter)+", agent " + str(agent))
+        print("agent_selection "+env.agent_selection+" energy: "+str(env.instance(env.agent_selection).energy_level))
         print(env.agents)
         observation, reward, done, info = env.last()
         action = policy(observation, agent) if not done else None
         env.step(action)
         env.render()
-        time.sleep(0)
+        time.sleep(sleep_time)
         print()
         iter += 1
 
