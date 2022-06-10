@@ -6,14 +6,14 @@ Basically an implementation with modifications of the paper:
 
 ### PettingZoo
 This implementation does use the PettinZoo library for strictly AEC turned
-actiom behavior of the various agents (predators, Prey, Grass).
+action behavior of the various agents (predators, Prey, Grass).
 
 Behavior predators: 
-- moving to Mooreneigh borhood (choice)
-- eating prey (automaticy)
-- metabolisme energy by aging (automaticly)
+- moving to Moore neighborhood (choice)
+- eating prey (automatically)
+- metabolism energy by aging (automatically)
 - metabolism energy bij moving (choice)
-- reproduce (automticly above treshold energy level)
+- reproduce (automatically above threshold energy level)
 
 ### System Info
 - Python 3.10
