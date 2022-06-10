@@ -1,4 +1,4 @@
-# rl-predator-prey
+# PettingZoo predator prey AEC 
 Reinforcement Learning in a Predator Prey model.
 Basically an implementation with modifications of the paper:
 
