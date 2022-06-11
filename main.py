@@ -13,12 +13,12 @@ import time
 
 if __name__ == '__main__':
 
-    x_size = 7
-    n_iterations = 1000
+    x_size = 5
+    n_iterations = 100
 
-    n_initial_predators = 5
-    n_initial_prey = 10
-    n_initial_grass = 20
+    n_initial_predators = 3
+    n_initial_prey = 3
+    n_initial_grass = 3
 
     initial_energy_level_predators = 5
     initial_energy_level_prey = 4
@@ -58,8 +58,6 @@ if __name__ == '__main__':
     pygame.init()  # Initializing Pygame
 
 
-
-
     class PredatorPreyGridEnv(AECEnv):  # noqa
         # "noqa" https://stackoverflow.com/questions/34066933/pycharm-warning-must-implement-all-abstract-methods
 
@@ -69,7 +67,7 @@ if __name__ == '__main__':
         def __init__(self, x_size, n_initial_predators, n_initial_prey, n_initial_grass):
 
             super().__init__()
-            self._skip_agent_selection = None
+            #self._skip_agent_selection = None
             self.x_size = x_size
             self.n_initial_predators = n_initial_predators
             self.n_initial_prey = n_initial_prey
@@ -91,6 +89,7 @@ if __name__ == '__main__':
                 [[[] for _ in range(PredatorPreyGridEnv.n_agent_types)] for _ in range(x_size)]
                 for _ in range(x_size)]
             self.n_active_agents = [0 for _ in range(self.n_agent_types)]
+            # TODO: turn dict into matrix?
             self.actions_positions_dict = {0: [-1, -1], 1: [0, -1], 2: [1, -1],
                                            3: [-1, 0], 4: [0, 0], 5: [1, 0],
                                            6: [-1, 1], 7: [0, 1], 8: [1, 1]}
@@ -406,6 +405,7 @@ if __name__ == '__main__':
             self.np_random, _ = gym.utils.seeding.np_random(seed)
 
         def reset(self, seed=None):
+            # TODO: fix seed
             self.observations = {agent: None for agent in self.agents}
             for j in range(self.n_initial_predators):
                 x, y = self.get_random_location()
@@ -531,26 +531,7 @@ if __name__ == '__main__':
 
         def step(self, action):
             if self.dones[self.agent_selection]:
-                """
-                the sequence of living agents can give rise to unexpected behavior 
-                in the following cases of "done" and subsequent removal:
-
-                    1) the selected agent causes another agent to "done" wher the other agent has 
-                    already been selected earlier in the agent_order of the same cycle,
-                    2) the selected agent causes itself to "done" (see earlier example)
-                    3) the selected agents causes its direct successor in the agent_order to "done".
-                """
-                # to fix a runtime error when self._skip_agent_selection is already being "done"
-                # and deleted by the selected agent: see 3)
-                if self.agent_selection == self._skip_agent_selection:
-                    self._skip_agent_selection = self._agent_selector.next()
                 self._was_done_step(action)
-                # to fix changing array indexes when the selected agent
-                # deletes an earlier agent in the agent order (agents): see 1)
-                # and to fix when the selected agent deltes itself: see 2)
-                if self.agents and self.agents[self._agent_selector._current_agent - 1] != \
-                        self.agent_selection:
-                    self._agent_selector._current_agent -= 1
                 return
             # main contents of step
             agent_instance = self.instance(self.agent_selection)
@@ -573,8 +554,8 @@ if __name__ == '__main__':
                     elif predator.energy_level > self.predators_reproduction_energy_minimum:
                         # energy level above "predators_reproduction_energy_minimum"
                         predator.energy_level -= self.predators_cost_of_reproduction
-                        new_predator_name = self.create_agent(self.predator_type_nr, predator.x, predator.y)
-                        print(new_predator_name+" created from "+ predator.agent_name)
+                        #new_predator_name = self.create_agent(self.predator_type_nr, predator.x, predator.y)
+                        #print(new_predator_name+" created from "+ predator.agent_name)
 
                 case self.prey_type_nr:
                     prey = agent_instance
@@ -601,8 +582,8 @@ if __name__ == '__main__':
                                       " and has energy-level " + str(prey.energy_level) + ", grass stays alive")
                     elif prey.energy_level > self.prey_reproduction_energy_minimum:
                         prey.energy_level -= self.prey_cost_of_reproduction
-                        new_prey_name = self.create_agent(self.prey_type_nr, prey.x, prey.y)
-                        print(new_prey_name+" created from " + prey.agent_name)
+                        #new_prey_name = self.create_agent(self.prey_type_nr, prey.x, prey.y)
+                        #print(new_prey_name+" created from " + prey.agent_name)
 
                 case self.grass_type_nr:
                     grass = agent_instance
@@ -612,8 +593,8 @@ if __name__ == '__main__':
                         moore_index = self.get_empty_grass_moore_index()
                         x = (grass.x + self.actions_positions_dict[moore_index][0]) % self.x_size
                         y = (grass.y + self.actions_positions_dict[moore_index][1]) % self.x_size
-                        new_grass_name = self.create_agent(self.grass_type_nr, x, y)
-                        print(new_grass_name+" created")
+                        #new_grass_name = self.create_agent(self.grass_type_nr, x, y)
+                        #print(new_grass_name+" created")
 
             self.agent_selection = self._agent_selector.next()
             self.agent_selection = self._dones_step_first()
@@ -624,6 +605,19 @@ if __name__ == '__main__':
             """
             if action is not None:
                 raise ValueError("when an agent is done, the only valid action is None")
+            """
+            the sequence of living agents can give rise to unexpected behavior 
+            in the following cases of "done" and subsequent removal:
+
+                1) the selected agent causes another agent to "done" where the other agent has 
+                already been selected earlier in the agent_order of the same cycle,
+                2) the selected agent causes itself to "done"
+                3) the selected agents causes its direct successor in the agent_order to "done".
+            """
+            # to fix a runtime error when self._skip_agent_selection is already being "done"
+            # and deleted by the selected agent: see 3)
+            if self.agent_selection == self._skip_agent_selection:
+                self._skip_agent_selection = self._agent_selector.next()
 
             # removes done agent
             agent_name = self.agent_selection
@@ -644,6 +638,13 @@ if __name__ == '__main__':
                     self.agent_selection = self._skip_agent_selection
                 self._skip_agent_selection = None
             self._clear_rewards()
+            # to fix changing array indexes when the selected agent
+            # deletes an earlier agent in the agent order (agents): see 1)
+            # and to fix when the selected agent deletes itself: see 2)
+            if self.agents and self.agents[self._agent_selector._current_agent - 1] != \
+                    self.agent_selection:
+                self._agent_selector._current_agent -= 1
+
 
     def policy(observation, agent):
         # observation_space = env.observation_spaces(agent)
