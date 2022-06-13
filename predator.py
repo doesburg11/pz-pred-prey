@@ -11,4 +11,3 @@ class Predator:
         self.agent_name = "predator_" + str(self.id_nr)
         self.energy_level = 0
         self.age = 0
-
