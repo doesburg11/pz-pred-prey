@@ -1,6 +1,4 @@
-import gym
 from gym import spaces
-from gym.utils import seeding
 import numpy as np
 import pygame
 from pettingzoo import AECEnv
@@ -8,13 +6,14 @@ from pettingzoo.utils import agent_selector
 from prey import Prey
 from predator import Predator
 from grass import Grass
-# import random
+import random
 import time
 
 if __name__ == '__main__':
 
     x_size = 5
     n_iterations = 100
+    seed = 10
 
     n_initial_predators = 3
     n_initial_prey = 3
@@ -52,7 +51,7 @@ if __name__ == '__main__':
     import os
     x = 1280
     y = 0
-    sleep_time = 0.2
+    sleep_time = 0
     os.environ['SDL_VIDEO_WINDOW_POS'] = "%d,%d" % (x, y)
 
     pygame.init()  # Initializing Pygame
@@ -67,13 +66,12 @@ if __name__ == '__main__':
         def __init__(self, x_size, n_initial_predators, n_initial_prey, n_initial_grass):
 
             super().__init__()
-            #self._skip_agent_selection = None
+            random.seed(seed)
             self.x_size = x_size
             self.n_initial_predators = n_initial_predators
             self.n_initial_prey = n_initial_prey
             self.n_initial_grass = n_initial_grass
 
-            self.np_random = None
             self.observations = None
             self._cumulative_rewards = dict()
             self.rewards = dict()
@@ -90,9 +88,9 @@ if __name__ == '__main__':
                 for _ in range(x_size)]
             self.n_active_agents = [0 for _ in range(self.n_agent_types)]
             # TODO: turn dict into matrix?
-            self.actions_positions_dict = {0: [-1, -1], 1: [0, -1], 2: [1, -1],
-                                           3: [-1, 0], 4: [0, 0], 5: [1, 0],
-                                           6: [-1, 1], 7: [0, 1], 8: [1, 1]}
+            self.actions_positions_dict = {0: [-1, -1], 3: [0, -1], 6: [1, -1],
+                                           1: [-1, 0], 4: [0, 0], 7: [1, 0],
+                                           2: [-1, 1], 5: [0, 1], 8: [1, 1]}
             self.n_neighborhood_cells = 9
             self.relative_x_positions_neighbors = [-1, 0, 1]
             self.relative_y_positions_neighbors = [-1, 0, 1]
@@ -139,6 +137,10 @@ if __name__ == '__main__':
 
         def instance(self, agent_name):
             return self.agents_dict[agent_name]
+
+        def is_cell_occupied_with_grass(self, x, y):
+            is_occupied = self.n_agents_in_grid_cells[self.grass_type_nr][x, y] > 0
+            return is_occupied
 
         def step_energy(self, agent_name, action):
             step_energy = 0
@@ -258,6 +260,8 @@ if __name__ == '__main__':
                     grass.age = 0
                     # localization helpers
                     self.n_agents_in_grid_cells[self.grass_type_nr][x, y] += 1
+                    if self.n_agents_in_grid_cells[self.grass_type_nr][x, y] > 1:
+                        print("ERROR: NOT MORE THAN ONE GRASS AGENT PER CELL")
                     self.agents_lists_in_grid_cells[x][y][self.grass_type_nr].append(grass)
                     self.agents_instance_list.append(grass)
                     self.agents.append(agent_name)
@@ -270,12 +274,14 @@ if __name__ == '__main__':
                     self.id_nr += 1
             return agent_name
 
-        def get_random_location(self, seed=None):
+        def seed(self, seed=None):
+            pass
+
+        def get_random_location(self):
             # TODO: research implementation seed
-            if seed is not None:
-                self.seed(seed=seed)
-            x = np.random.randint(0, self.x_size)
-            y = np.random.randint(0, self.x_size)
+            x = random.randint(0, self.x_size-1)
+            y = random.randint(0, self.x_size-1)
+            print("(x,y)= ("+str(x)+","+str(y)+")")
             return x, y
 
         def get_neighborhood_agents(self, agent):
@@ -306,25 +312,28 @@ if __name__ == '__main__':
                     moore_index += 1
             return n_agents_in_neighborhood
 
-        def get_empty_grass_moore_index(self):
+        def get_empty_grass_location(self):
             grass_instance = self.instance(self.agent_selection)
-            x = grass_instance.x
-            y = grass_instance.y
+            x_grass = grass_instance.x
+            y_grass = grass_instance.y
             possible_grass_offspring_moore_index_list = []
             moore_index = 0
             for d_x in self.relative_x_positions_neighbors:
                 for d_y in self.relative_y_positions_neighbors:
-                    x_neighbor_location = (x + d_x) % x_size
-                    y_neighbor_location = (y + d_y) % x_size
-                    if self.n_agents_in_grid_cells[self.grass_type_nr][x_neighbor_location, y_neighbor_location] == 1:
+                    x_neighbor_location = (x_grass + d_x) % x_size
+                    y_neighbor_location = (y_grass + d_y) % x_size
+                    if not self.is_cell_occupied_with_grass(x_neighbor_location, y_neighbor_location):
                         possible_grass_offspring_moore_index_list.append(moore_index)
                     moore_index += 1
 
             if possible_grass_offspring_moore_index_list:
-                random_moore_index = np.random.randint(0, len(possible_grass_offspring_moore_index_list))
+                random_moore_index = random.randint(0, len(possible_grass_offspring_moore_index_list)-1)
+                random_moore_location = possible_grass_offspring_moore_index_list[random_moore_index]
+                x = (grass_instance.x + self.actions_positions_dict[random_moore_location][0]) % self.x_size
+                y = (grass_instance.y + self.actions_positions_dict[random_moore_location][1]) % self.x_size
+                return x, y
             else:
-                random_moore_index = None
-            return random_moore_index
+                return None
 
         def get_features(self, agent):
             """
@@ -401,11 +410,9 @@ if __name__ == '__main__':
             observation = self.n_agents_in_grid_cells
             return observation
 
-        def seed(self, seed=None):
-            self.np_random, _ = gym.utils.seeding.np_random(seed)
-
         def reset(self, seed=None):
-            # TODO: fix seed
+            #if seed is not None:
+            #    self.seed(seed=seed)
             self.observations = {agent: None for agent in self.agents}
             for j in range(self.n_initial_predators):
                 x, y = self.get_random_location()
@@ -415,7 +422,7 @@ if __name__ == '__main__':
                 self.create_agent(self.prey_type_nr, x, y)
             for j in range(self.n_initial_grass):
                 x, y = self.get_random_location()
-                while len(self.agents_lists_in_grid_cells[x][y][self.grass_type_nr]) > 0:
+                while self.is_cell_occupied_with_grass(x,y):
                     x, y = self.get_random_location()
                 self.create_agent(self.grass_type_nr, x, y)
             self._agent_selector = agent_selector(self.agents)
@@ -500,6 +507,7 @@ if __name__ == '__main__':
                               int(self.pixel_scale * y + self.pixel_scale / 2))
                     pygame.draw.circle(self.screen, prey_color, center,
                                        int(self.pixel_scale*scale / 4))
+                    #id_nr
                     text = font.render(str(agent.id_nr), False, (255, 255, 225))
                     size_id_nr = len(str(agent.id_nr))
                     center_id = (int(self.pixel_scale * x + self.pixel_scale / (2+(size_id_nr*5)/10)),
@@ -510,17 +518,24 @@ if __name__ == '__main__':
                     pos = pygame.Rect(self.pixel_scale * x + 6, self.pixel_scale * y + 6,
                                       self.pixel_scale - 12, self.pixel_scale - 12)
                     pygame.draw.rect(self.screen, grass_color, pos, 10*scale)
+                    # id_nr
+                    text = font.render(str(agent.id_nr), False, grass_color)
+                    size_id_nr = len(str(agent.id_nr))
+                    center_id = (int(self.pixel_scale * x + self.pixel_scale / (6+(size_id_nr*5)/10)),
+                                 int(self.pixel_scale * y + self.pixel_scale / 6))
+                    self.screen.blit(text, center_id)
+
 
             pygame.display.update()
 
-        def get_random_agent(self, agent_type_nr, x, y):
+        def get_random_agent_grid_cell(self, agent_type_nr, x, y):
             agent_instance = None
             match agent_type_nr:
                 case self.prey_type_nr:
                     prey_list = self.agents_lists_in_grid_cells[x][y][self.prey_type_nr]
                     # prey available at new predator location?
                     if prey_list:
-                        random_prey_index = np.random.randint(0, len(prey_list))
+                        random_prey_index = random.randint(0, len(prey_list)-1)
                         agent_instance = prey_list[random_prey_index]
                 case self.grass_type_nr:
                     grass_list = self.agents_lists_in_grid_cells[x][y][self.grass_type_nr]
@@ -545,7 +560,7 @@ if __name__ == '__main__':
                         self.dones[predator.agent_name] = True
                         print(predator.agent_name + " has no energy left and is done")
                     elif predator.energy_level <= self.predators_reproduction_energy_minimum:
-                        eaten_prey_instance = self.get_random_agent(self.prey_type_nr, predator.x, predator.y)
+                        eaten_prey_instance = self.get_random_agent_grid_cell(self.prey_type_nr, predator.x, predator.y)
                         if eaten_prey_instance:
                             self.dones[eaten_prey_instance.agent_name] = True
                             predator.energy_level += eaten_prey_instance.energy_level
@@ -567,7 +582,7 @@ if __name__ == '__main__':
                         print(prey.agent_name + " has no energy left and is done")
                     elif prey.energy_level <= self.prey_reproduction_energy_minimum:
                         # grass available for prey with positive energy level?
-                        eaten_grass_instance = self.get_random_agent(self.grass_type_nr, prey.x, prey.y)
+                        eaten_grass_instance = self.get_random_agent_grid_cell(self.grass_type_nr, prey.x, prey.y)
                         if eaten_grass_instance:
                             prey_real_energy_consumption = min(self.prey_max_energy_consumption,
                                                                eaten_grass_instance.energy_level)
@@ -589,12 +604,10 @@ if __name__ == '__main__':
                     grass = agent_instance
                     grass.energy_level += self.grass_growth
                     if grass.energy_level > self.grass_reproduction_energy_minimum \
-                            and self.get_empty_grass_moore_index():
-                        moore_index = self.get_empty_grass_moore_index()
-                        x = (grass.x + self.actions_positions_dict[moore_index][0]) % self.x_size
-                        y = (grass.y + self.actions_positions_dict[moore_index][1]) % self.x_size
-                        #new_grass_name = self.create_agent(self.grass_type_nr, x, y)
-                        #print(new_grass_name+" created")
+                            and not self.get_empty_grass_location() == None:
+                        x, y = self.get_empty_grass_location()
+                        new_grass_name = self.create_agent(self.grass_type_nr, x, y)
+                        print(new_grass_name+" created @ ["+str(x)+","+str(y)+"] from " + grass.agent_name+ " @ ["+str(grass.x)+","+str(grass.y)+"]")
 
             self.agent_selection = self._agent_selector.next()
             self.agent_selection = self._dones_step_first()
@@ -650,10 +663,10 @@ if __name__ == '__main__':
         # observation_space = env.observation_spaces(agent)
         action = None
         if env.agents_dict[agent].agent_type_name == "predator":
-            action = env.act_space.sample()
+            action = random.randint(0,8) #env.act_space.sample()
 
         elif env.agents_dict[agent].agent_type_name == "prey":
-            action = env.act_space.sample()
+            action = random.randint(0,8) #env.act_space.sample()
 
         elif env.agents_dict[agent].agent_type_name == "grass":
             action = 4
