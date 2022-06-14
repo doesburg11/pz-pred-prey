@@ -5,7 +5,7 @@ Basically an implementation with modifications of the paper:
 “An Agent-Based Predator-Prey Model with Reinforcement Learning” by  M. Olsen and R. Fraczkowski.
 
 ### PettingZoo
-This implementation does use the PettinZoo library for strictly AEC turned action behavior of the various agents (predators, Prey, Grass). This is also a workaround for unexpected behavior in the PettingZoo library with respect to the  removal of agents in turn based agent selections. 
+This implementation does use the PettinZoo library for strictly AEC turned action behavior of the various agents (predators, Prey, Grass). This is also a workaround for unexpected behavior in the PettingZoo library with respect to the  removal of agents in strictly turn based agent selections. 
 
 Behavior predators: 
 - moving to Moore neighborhood (choice)
