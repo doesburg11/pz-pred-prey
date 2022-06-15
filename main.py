@@ -53,7 +53,6 @@ if __name__ == '__main__':
     os.environ['SDL_VIDEO_WINDOW_POS'] = "%d,%d" % (x, y)
     pygame.init()  # Initializing Pygame
 
-
     class PredatorPreyGridEnv(AECEnv):  # noqa
         # "noqa" https://stackoverflow.com/questions/34066933/pycharm-warning-must-implement-all-abstract-methods
 
@@ -82,19 +81,15 @@ if __name__ == '__main__':
             self._agent_selector = None
 
             # location
-            self.n_agents_in_grid_cells = np.zeros((self.x_size, self.x_size, self.n_agent_types), dtype=int)
-            self.agents_names_in_grid_cells = [
-                [[[] for _ in range(self.n_agent_types)] for _ in range(self.x_size)]
-                for _ in range(self.x_size)]
-
-            self.n_active_agents = [0 for _ in range(self.n_agent_types)]
-            # map actions into relative grid positions and the Moore neighborhood
+            self.n_agents_in_grid_cells = np.zeros((self.n_agent_types, self.x_size, self.x_size), dtype=int)
+            self.n_agents_in_grid = np.zeros(self.n_agent_types, dtype=int)  # [0 for _ in range(self.n_agent_types)]
+            self.agent_names_in_grid_cells = [[[[] for _ in range(self.x_size)] for _ in range(self.x_size)]
+                                              for _ in range(self.n_agent_types)]
+            # map actions into relative grid positions of the Moore neighborhood
             self.actions_positions_dict = {0: [-1, -1], 3: [0, -1], 6: [1, -1],
                                            1: [-1, 0], 4: [0, 0], 7: [1, 0],
                                            2: [-1, 1], 5: [0, 1], 8: [1, 1]}
             self.n_neighborhood_cells = 9
-            self.relative_x_positions_neighbors = [-1, 0, 1]
-            self.relative_y_positions_neighbors = [-1, 0, 1]
 
             # observation space
             self.obs_range = x_size  # obs_range: Size of the box around the agent that the agent observes
@@ -103,19 +98,18 @@ if __name__ == '__main__':
             self.obs_range_predators = x_size  # full environment
             self.obs_range_prey = x_size  # full environment
 
-            self.n_all_agents = self.n_initial_predators + self.n_initial_prey
-            self.n_all_possible_agents = 10000  # maximum number of agents
-            self.n_actions_agents = len(self.actions_positions_dict)  # Moore
-            self.act_space = spaces.Discrete(self.n_actions_agents)
-            self.action_spaces = [self.act_space for _ in range(self.n_all_agents)]  # magent: action_spaces_list
-            self.n_features = 12
-
             # agent definitions
             self.predator_type_nr = 0
             self.prey_type_nr = 1
             self.grass_type_nr = 2
-            self.agents = []  # predator_0, ...,predator_n-1, prey_n,..., prey_n+m]
+            self.agents = []  # predator_0, ...,predator_n-1, prey_n,..., prey_n+m, grass_n+m+1, ...]
             self.id_nr = 0
+            self.n_all_moving_agents = self.n_initial_predators + self.n_initial_prey
+            self.n_all_possible_agents = 10000  # maximum number of agents
+            self.n_actions_agents = len(self.actions_positions_dict)  # Moore
+            self.act_space = spaces.Discrete(self.n_actions_agents)
+            self.action_spaces = [self.act_space for _ in range(self.n_all_moving_agents)]  # magent: action_spaces_list
+            self.n_features = 12
 
             self.predators_metabolism_energy = predators_metabolism_energy
             self.predators_step_energy = predators_step_energy
@@ -139,7 +133,7 @@ if __name__ == '__main__':
             return self.agents_name_to_instance_dict[agent_name]
 
         def is_cell_occupied_with_grass(self, _x, _y):
-            is_occupied = self.n_agents_in_grid_cells[_x, _y][self.grass_type_nr] > 0
+            is_occupied = self.n_agents_in_grid_cells[self.grass_type_nr][_x, _y] > 0
             return is_occupied
 
         def step_energy(self, agent_name, _action):
@@ -163,20 +157,20 @@ if __name__ == '__main__':
                     old_y = predator.y
                     predator.x = new_x
                     predator.y = new_y
-                    self.n_agents_in_grid_cells[old_x, old_y][self.predator_type_nr] -= 1
-                    self.n_agents_in_grid_cells[new_x, new_y][self.predator_type_nr] += 1
-                    self.agents_names_in_grid_cells[old_x][old_y][self.predator_type_nr].remove(agent_name)
-                    self.agents_names_in_grid_cells[new_x][new_y][self.predator_type_nr].append(agent_name)
+                    self.n_agents_in_grid_cells[self.predator_type_nr][old_x, old_y] -= 1
+                    self.n_agents_in_grid_cells[self.predator_type_nr][new_x, new_y] += 1
+                    self.agent_names_in_grid_cells[self.predator_type_nr][old_x][old_y].remove(agent_name)
+                    self.agent_names_in_grid_cells[self.predator_type_nr][new_x][new_y].append(agent_name)
                 case self.prey_type_nr:
                     prey = agent_instance
                     old_x = prey.x
                     old_y = prey.y
                     prey.x = new_x
                     prey.y = new_y
-                    self.n_agents_in_grid_cells[old_x, old_y][self.prey_type_nr] -= 1
-                    self.n_agents_in_grid_cells[new_x, new_y][self.prey_type_nr] += 1
-                    self.agents_names_in_grid_cells[old_x][old_y][self.prey_type_nr].remove(agent_name)
-                    self.agents_names_in_grid_cells[new_x][new_y][self.prey_type_nr].append(agent_name)
+                    self.n_agents_in_grid_cells[self.prey_type_nr][old_x, old_y] -= 1
+                    self.n_agents_in_grid_cells[self.prey_type_nr][new_x, new_y] += 1
+                    self.agent_names_in_grid_cells[self.prey_type_nr][old_x][old_y].remove(agent_name)
+                    self.agent_names_in_grid_cells[self.prey_type_nr][new_x][new_y].append(agent_name)
                 case self.grass_type_nr:
                     return
 
@@ -200,14 +194,16 @@ if __name__ == '__main__':
             del self._cumulative_rewards[agent_name]
             del self.infos[agent_name]
             self.agents.remove(agent_name)
-            self.agents_names_in_grid_cells[agent_instance.x][agent_instance.y][
-                agent_instance.agent_type_nr].remove(agent_name)
-            self.n_agents_in_grid_cells[agent_instance.x, agent_instance.y][agent_instance.agent_type_nr] -= 1
+            self.agent_names_in_grid_cells[agent_instance.agent_type_nr][agent_instance.x][agent_instance.y].remove(
+                agent_name)
+
+            self.n_agents_in_grid_cells[agent_instance.agent_type_nr][agent_instance.x, agent_instance.y] -= 1
             self.agents_name_to_instance_dict.pop(agent_name, None)
-            self.n_active_agents[agent_instance.agent_type_nr] -= 1
+            self.n_agents_in_grid[agent_instance.agent_type_nr] -= 1
             print(agent_name + " is removed")
             return self.agents
 
+        # noinspection PyTypeChecker
         def create_agent(self, agent_type_nr, new_x, new_y):
             agent_name = None
             match agent_type_nr:
@@ -219,11 +215,12 @@ if __name__ == '__main__':
                     predator.energy_level = initial_energy_level_predators
                     predator.age = 0
                     # localization helpers
-                    self.n_agents_in_grid_cells[new_x, new_y][self.predator_type_nr] += 1
-                    self.agents_names_in_grid_cells[new_x][new_y][self.predator_type_nr].append(agent_name)
+                    self.n_agents_in_grid_cells[self.predator_type_nr][new_x, new_y] += 1
+                    self.agent_names_in_grid_cells[self.predator_type_nr][new_x][
+                        new_y].append(agent_name)
                     self.agents.append(agent_name)
                     self.agents_name_to_instance_dict[agent_name] = predator
-                    self.n_active_agents[self.predator_type_nr] += 1
+                    self.n_agents_in_grid[self.predator_type_nr] += 1
                     self.dones[agent_name] = False
                     self.rewards[agent_name] = 0
                     self._cumulative_rewards[agent_name] = 0
@@ -237,11 +234,12 @@ if __name__ == '__main__':
                     prey.energy_level = initial_energy_level_prey
                     prey.age = 0
                     # localization helpers
-                    self.n_agents_in_grid_cells[new_x, new_y][self.prey_type_nr] += 1
-                    self.agents_names_in_grid_cells[new_x][new_y][self.prey_type_nr].append(agent_name)
+                    self.n_agents_in_grid_cells[self.prey_type_nr][new_x, new_y] += 1
+                    self.agent_names_in_grid_cells[self.prey_type_nr][new_x][
+                        new_y].append(agent_name)
                     self.agents.append(agent_name)
                     self.agents_name_to_instance_dict[agent_name] = prey
-                    self.n_active_agents[self.prey_type_nr] += 1
+                    self.n_agents_in_grid[self.prey_type_nr] += 1
                     self.dones[agent_name] = False
                     self.rewards[agent_name] = 0
                     self._cumulative_rewards[agent_name] = 0
@@ -258,10 +256,11 @@ if __name__ == '__main__':
                     self.n_agents_in_grid_cells[new_x, new_y][self.grass_type_nr] += 1
                     if self.n_agents_in_grid_cells[new_x, new_y][self.grass_type_nr] > 1:
                         print("ERROR: NOT MORE THAN ONE GRASS AGENT PER CELL")
-                    self.agents_names_in_grid_cells[new_x][new_y][self.grass_type_nr].append(agent_name)
+                    self.agent_names_in_grid_cells[self.grass_type_nr][new_x][
+                        new_y].append(agent_name)
                     self.agents.append(agent_name)
                     self.agents_name_to_instance_dict[agent_name] = grass
-                    self.n_active_agents[self.grass_type_nr] += 1
+                    self.n_agents_in_grid[self.grass_type_nr] += 1
                     self.dones[agent_name] = False
                     self.rewards[agent_name] = 0
                     self._cumulative_rewards[agent_name] = 0
@@ -278,25 +277,20 @@ if __name__ == '__main__':
             return _x, _y
 
         def get_neighborhood_agents(self, agent_name):
-            """
-            Returns the number of the different agents for each neighbor cell
-            """
-            # current_location = agent.location
-            _x = env.agents_name_to_instance_dict[agent_name].x
-            _y = env.agents_name_to_instance_dict[agent_name].y
-
-            n_agents_in_neighborhood = np.zeros([self.n_agent_types, self.n_neighborhood_cells])
+            _x = self.agents_name_to_instance_dict[agent_name].x
+            _y = self.agents_name_to_instance_dict[agent_name].y
+            n_agents_in_neighborhood = np.zeros([self.n_agent_types, self.n_neighborhood_cells], dtype=int)
             moore_index = 0
-            for d_x in self.relative_x_positions_neighbors:
-                for d_y in self.relative_y_positions_neighbors:
+            for d_x in [-1, 0, 1]:
+                for d_y in [-1, 0, 1]:
                     x_neighbor_location = (_x + d_x) % self.x_size
                     y_neighbor_location = (_y + d_y) % self.x_size
                     n_agents_in_neighborhood[self.predator_type_nr][moore_index] = \
-                        self.n_agents_in_grid_cells[x_neighbor_location, y_neighbor_location][self.predator_type_nr]
+                        self.n_agents_in_grid_cells[self.predator_type_nr][x_neighbor_location, y_neighbor_location]
                     n_agents_in_neighborhood[self.prey_type_nr][moore_index] = \
-                        self.n_agents_in_grid_cells[x_neighbor_location, y_neighbor_location][self.prey_type_nr]
+                        self.n_agents_in_grid_cells[self.prey_type_nr][x_neighbor_location, y_neighbor_location]
                     n_agents_in_neighborhood[self.grass_type_nr][moore_index] = \
-                        self.n_agents_in_grid_cells[x_neighbor_location, y_neighbor_location][self.grass_type_nr]
+                        self.n_agents_in_grid_cells[self.grass_type_nr][x_neighbor_location, y_neighbor_location]
                     moore_index += 1
             return n_agents_in_neighborhood
 
@@ -306,8 +300,8 @@ if __name__ == '__main__':
             y_grass = grass_instance.y
             possible_grass_offspring_moore_index_list = []
             moore_index = 0
-            for d_x in self.relative_x_positions_neighbors:
-                for d_y in self.relative_y_positions_neighbors:
+            for d_x in [-1, 0, 1]:
+                for d_y in [-1, 0, 1]:
                     x_neighbor_location = (x_grass + d_x) % self.x_size
                     y_neighbor_location = (y_grass + d_y) % self.x_size
                     if not self.is_cell_occupied_with_grass(x_neighbor_location, y_neighbor_location):
@@ -324,33 +318,54 @@ if __name__ == '__main__':
                 return None
 
         def get_features(self, agent_name):
-            """
-            Returns the features for a position (x,y) as a matrix 9x3
-            Row 1: predators, Row 2: prey, Row 3: grass
-            """
             features = np.zeros(self.n_features)
-            n_agents_in_neighborhood = self.get_neighborhood_agents(agent_name)
-            if self.n_active_agents[self.prey_type_nr] != 0:
-                features[0] = sum(n_agents_in_neighborhood[self.prey_type_nr][:]) / self.n_active_agents[
-                    self.prey_type_nr]
-            else:
-                features[0] = 0
-            if self.n_active_agents[self.predator_type_nr] != 0:
-                features[1] = sum(n_agents_in_neighborhood[self.predator_type_nr][:]) / \
-                              self.n_active_agents[self.predator_type_nr]
-            else:
-                features[1] = 0
-            if self.n_active_agents[self.grass_type_nr] != 0:
-                features[2] = sum(n_agents_in_neighborhood[self.grass_type_nr][:]) / self.n_active_agents[
-                    self.grass_type_nr]
-            else:
-                features[2] = 0
+            n_agents_in_neighborhood = self.get_neighborhood_agents(agent_name) # 3 x 9 matrix
+            n_predators_in_grid = self.n_agents_in_grid[self.predator_type_nr]
+            n_prey_in_grid = self.n_agents_in_grid[self.prey_type_nr]
+            n_grass_in_grid = self.n_agents_in_grid[self.grass_type_nr]
+            n_predators_in_neighborhood = sum(n_agents_in_neighborhood[self.predator_type_nr][:])
             n_prey_in_neighborhood = sum(n_agents_in_neighborhood[self.prey_type_nr][:])
-            if n_prey_in_neighborhood == 0:
-                features[3:self.n_features] = 0
-            else:
-                for f in range(self.n_neighborhood_cells):
-                    features[f + 3] = n_agents_in_neighborhood[self.prey_type_nr][f] / n_prey_in_neighborhood
+            n_grass_in_neighborhood = sum(n_agents_in_neighborhood[self.grass_type_nr][:])
+            agent_instance = self.instance(agent_name)
+            match agent_instance.agent_type_nr:
+                case self.predator_type_nr:
+                    if n_prey_in_grid != 0:
+                        features[0] = n_prey_in_neighborhood / n_prey_in_grid
+                    else:
+                        features[0] = 0
+                    if n_predators_in_grid != 0:
+                        features[1] = n_predators_in_neighborhood /n_predators_in_grid
+                    else:
+                        features[1] = 0
+                    if n_grass_in_grid != 0:
+                        features[2] = n_grass_in_neighborhood / n_grass_in_grid
+                    else:
+                        features[2] = 0
+                    if n_prey_in_neighborhood != 0:
+                        for i in range(self.n_neighborhood_cells):
+                            features[i+3] = n_agents_in_neighborhood[self.prey_type_nr][i] / n_prey_in_neighborhood
+                    else:
+                        for i in range(self.n_neighborhood_cells):
+                            features[i+3] = 0
+                case self.prey_type_nr:
+                    if n_predators_in_grid != 0:
+                        features[0] = n_predators_in_neighborhood / n_predators_in_grid
+                    else:
+                        features[0] = 0
+                    if n_prey_in_grid != 0:
+                        features[1] = n_prey_in_neighborhood /n_prey_in_grid
+                    else:
+                        features[1] = 0
+                    if n_grass_in_grid != 0:
+                        features[2] = n_grass_in_neighborhood / n_grass_in_grid
+                    else:
+                        features[2] = 0
+                    if n_predators_in_neighborhood != 0:
+                        for i in range(self.n_neighborhood_cells):
+                            features[i+3] = n_agents_in_neighborhood[self.predator_type_nr][i] / n_predators_in_neighborhood
+                    else:
+                        for i in range(self.n_neighborhood_cells):
+                            features[i+3] = 0
             return features
 
         def get_reward(self, agent_name):
@@ -365,9 +380,9 @@ if __name__ == '__main__':
             if self.agents_name_to_instance_dict[agent_name].agent_type_name == "predator":
                 type_animal = 1
                 n_agents_in_neighborhood = self.get_neighborhood_agents(agent_name)
-                if self.n_active_agents[self.prey_type_nr] != 0:
+                if self.n_agents_in_grid[self.prey_type_nr] != 0:
                     relative_prey = sum(n_agents_in_neighborhood[self.prey_type_nr][
-                                        :]) / self.n_active_agents[self.prey_type_nr]
+                                        :]) / self.n_agents_in_grid[self.prey_type_nr]
 
                 else:
                     relative_prey = 0
@@ -380,9 +395,9 @@ if __name__ == '__main__':
             elif self.agents_name_to_instance_dict[agent_name].agent_type_name == "prey":
                 type_animal = -1
                 n_agents_in_neighborhood = self.get_neighborhood_agents(agent_name)
-                if self.n_active_agents[self.predator_type_nr] != 0:
+                if self.n_agents_in_grid[self.predator_type_nr] != 0:
                     relative_predators = sum(n_agents_in_neighborhood[self.predator_type_nr][
-                                             :]) / self.n_active_agents[self.predator_type_nr]
+                                             :]) / self.n_agents_in_grid[self.predator_type_nr]
                 else:
                     relative_predators = 0
                 opponent = relative_predators
@@ -452,7 +467,7 @@ if __name__ == '__main__':
                 for j in range(self.x_size):
                     (pos_x, pos_y) = (self.pixel_scale * i + self.pixel_scale // 1.3,
                                       self.pixel_scale * j + self.pixel_scale // 1.7)
-                    prey_count = observation[i, j][self.prey_type_nr]
+                    prey_count = self.n_agents_in_grid_cells[self.prey_type_nr][i, j]
                     count_text: str
                     if prey_count < 1:
                         count_text = ""
@@ -462,7 +477,7 @@ if __name__ == '__main__':
                         count_text = "+"
                     text = font.render(count_text, False, prey_color)
                     self.screen.blit(text, (pos_x, pos_y))
-                    predator_count = observation[i, j][self.predator_type_nr]
+                    predator_count = self.n_agents_in_grid_cells[self.predator_type_nr][i, j]
                     count_text: str
                     if predator_count < 1:
                         count_text = ""
@@ -514,7 +529,7 @@ if __name__ == '__main__':
                     text = font.render(str(agent_instance.id_nr), False, grass_color)
                     size_id_nr = len(str(agent_instance.id_nr))
                     center_id = (int(self.pixel_scale * _x + self.pixel_scale / (6 + (size_id_nr * 5) / 10)),
-                                 int(self.pixel_scale * _y + self.pixel_scale / 6))
+                                 int(self.pixel_scale * _y + self.pixel_scale / 10))
                     self.screen.blit(text, center_id)
 
             pygame.display.update()
@@ -523,12 +538,13 @@ if __name__ == '__main__':
             agent_instance = None
             match agent_type_nr:
                 case self.prey_type_nr:
-                    prey_name_list = self.agents_names_in_grid_cells[_x][_y][self.prey_type_nr]
+                    prey_name_list = self.agent_names_in_grid_cells[self.prey_type_nr][_x][_y]
                     if prey_name_list:  # prey available at new predator location?
                         random_prey_name = np.random.choice(prey_name_list)
                         agent_instance = self.instance(random_prey_name)
                 case self.grass_type_nr:
-                    grass_name_list = self.agents_names_in_grid_cells[_x][_y][self.grass_type_nr]
+                    grass_name_list = self.agent_names_in_grid_cells[self.grass_type_nr][_x][_y]
+
                     if grass_name_list:  # grass available at new prey location?
                         agent_instance = self.instance(grass_name_list[0])
             return agent_instance
