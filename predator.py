@@ -8,6 +8,7 @@ class Predator:
         self.y = y
         self.id_nr = id_nr
 
-        self.agent_name = "predator_" + str(self.id_nr)
+        self.agent_name = str()
         self.energy_level = 0
         self.age = 0
+        self.weights = []

@@ -15,7 +15,7 @@ if __name__ == '__main__':
     seed_nr = 1  # None
     x_size = 5
     n_initial_predators = 3
-    n_initial_prey = 10
+    n_initial_prey = 3
     n_initial_grass = 3
 
     initial_energy_level_predators = 5
@@ -23,7 +23,7 @@ if __name__ == '__main__':
     initial_energy_level_grass = 2
 
     predators_metabolism_energy = 0.5
-    prey_metabolism_energy = 0.2  # random.uniform(0, 2)
+    prey_metabolism_energy = 0.2
     predators_step_energy = 0.1
     prey_step_energy = 0.1  # 1
     predators_reproduction_energy_minimum = 5
@@ -125,6 +125,10 @@ if __name__ == '__main__':
             self.grass_growth = grass_growth
             self.grass_reproduction_energy_minimum = grass_reproduction_energy_minimum
 
+            # rl
+            self.epsilon = 0.1
+
+            # rendering
             self.pixel_scale = 100
             self.n_iterations = n_iterations
             self.screen = None
@@ -177,9 +181,9 @@ if __name__ == '__main__':
         def execute_action_selected_agent(self, _action):
             agent_name = self.agent_selection
             agent_instance = self.instance(agent_name)
-            self.move_agent(agent_instance.agent_name,
-                            (agent_instance.x + self.actions_positions_dict[action][0]) % self.x_size,
-                            (agent_instance.y + self.actions_positions_dict[action][1]) % self.x_size)
+            new_x = (agent_instance.x + self.actions_positions_dict[_action][0]) % self.x_size
+            new_y = (agent_instance.y + self.actions_positions_dict[_action][1]) % self.x_size
+            self.move_agent(agent_instance.agent_name, new_x, new_y)
             step_energy = self.step_energy(agent_name, action)
             return step_energy
 
@@ -253,8 +257,8 @@ if __name__ == '__main__':
                     grass.energy_level = initial_energy_level_grass
                     grass.age = 0
                     # localization helpers
-                    self.n_agents_in_grid_cells[new_x, new_y][self.grass_type_nr] += 1
-                    if self.n_agents_in_grid_cells[new_x, new_y][self.grass_type_nr] > 1:
+                    self.n_agents_in_grid_cells[self.grass_type_nr][new_x, new_y] += 1
+                    if self.n_agents_in_grid_cells[self.grass_type_nr][new_x, new_y] > 1:
                         print("ERROR: NOT MORE THAN ONE GRASS AGENT PER CELL")
                     self.agent_names_in_grid_cells[self.grass_type_nr][new_x][
                         new_y].append(agent_name)
@@ -317,57 +321,6 @@ if __name__ == '__main__':
             else:
                 return None
 
-        def get_features(self, agent_name):
-            features = np.zeros(self.n_features)
-            n_agents_in_neighborhood = self.get_neighborhood_agents(agent_name) # 3 x 9 matrix
-            n_predators_in_grid = self.n_agents_in_grid[self.predator_type_nr]
-            n_prey_in_grid = self.n_agents_in_grid[self.prey_type_nr]
-            n_grass_in_grid = self.n_agents_in_grid[self.grass_type_nr]
-            n_predators_in_neighborhood = sum(n_agents_in_neighborhood[self.predator_type_nr][:])
-            n_prey_in_neighborhood = sum(n_agents_in_neighborhood[self.prey_type_nr][:])
-            n_grass_in_neighborhood = sum(n_agents_in_neighborhood[self.grass_type_nr][:])
-            agent_instance = self.instance(agent_name)
-            match agent_instance.agent_type_nr:
-                case self.predator_type_nr:
-                    if n_prey_in_grid != 0:
-                        features[0] = n_prey_in_neighborhood / n_prey_in_grid
-                    else:
-                        features[0] = 0
-                    if n_predators_in_grid != 0:
-                        features[1] = n_predators_in_neighborhood /n_predators_in_grid
-                    else:
-                        features[1] = 0
-                    if n_grass_in_grid != 0:
-                        features[2] = n_grass_in_neighborhood / n_grass_in_grid
-                    else:
-                        features[2] = 0
-                    if n_prey_in_neighborhood != 0:
-                        for i in range(self.n_neighborhood_cells):
-                            features[i+3] = n_agents_in_neighborhood[self.prey_type_nr][i] / n_prey_in_neighborhood
-                    else:
-                        for i in range(self.n_neighborhood_cells):
-                            features[i+3] = 0
-                case self.prey_type_nr:
-                    if n_predators_in_grid != 0:
-                        features[0] = n_predators_in_neighborhood / n_predators_in_grid
-                    else:
-                        features[0] = 0
-                    if n_prey_in_grid != 0:
-                        features[1] = n_prey_in_neighborhood /n_prey_in_grid
-                    else:
-                        features[1] = 0
-                    if n_grass_in_grid != 0:
-                        features[2] = n_grass_in_neighborhood / n_grass_in_grid
-                    else:
-                        features[2] = 0
-                    if n_predators_in_neighborhood != 0:
-                        for i in range(self.n_neighborhood_cells):
-                            features[i+3] = n_agents_in_neighborhood[self.predator_type_nr][i] / n_predators_in_neighborhood
-                    else:
-                        for i in range(self.n_neighborhood_cells):
-                            features[i+3] = 0
-            return features
-
         def get_reward(self, agent_name):
             """
             reward = opponent * type + 2 * same * type
@@ -422,15 +375,22 @@ if __name__ == '__main__':
             self.observations = {agent_name: None for agent_name in self.agents}
             for j in range(self.n_initial_predators):
                 _x, _y = self.get_random_location()
-                self.create_agent(self.predator_type_nr, _x, _y)
+                predator_name = self.create_agent(self.predator_type_nr, _x, _y)
+                predator_instance = self.instance(predator_name)
+                predator_instance.weights = self.np_random.rand(self.n_features) * 6 - 3  # initial weights
             for j in range(self.n_initial_prey):
                 _x, _y = self.get_random_location()
-                self.create_agent(self.prey_type_nr, _x, _y)
+                prey_name = self.create_agent(self.prey_type_nr, _x, _y)
+                # print(prey_name+" created")
+                prey_instance = self.instance(prey_name)
+                prey_instance.weights = self.np_random.rand(self.n_features) * 6 - 3  # initial weights
+                # print("prey weights "+str(prey_instance.weights))
             for j in range(self.n_initial_grass):
                 _x, _y = self.get_random_location()
                 while self.is_cell_occupied_with_grass(_x, _y):
                     _x, _y = self.get_random_location()
                 self.create_agent(self.grass_type_nr, _x, _y)
+
             self._agent_selector = agent_selector(self.agents)
             self.agent_selection = self._agent_selector.next()
 
@@ -540,13 +500,13 @@ if __name__ == '__main__':
                 case self.prey_type_nr:
                     prey_name_list = self.agent_names_in_grid_cells[self.prey_type_nr][_x][_y]
                     if prey_name_list:  # prey available at new predator location?
-                        random_prey_name = np.random.choice(prey_name_list)
+                        random_prey_name = self.np_random.choice(prey_name_list)
                         agent_instance = self.instance(random_prey_name)
                 case self.grass_type_nr:
-                    grass_name_list = self.agent_names_in_grid_cells[self.grass_type_nr][_x][_y]
+                    grass_name = self.agent_names_in_grid_cells[self.grass_type_nr][_x][_y]
 
-                    if grass_name_list:  # grass available at new prey location?
-                        agent_instance = self.instance(grass_name_list[0])
+                    if grass_name:  # grass available at new prey location?
+                        agent_instance = self.instance(grass_name[0])
             return agent_instance
 
         def step(self, _action):
@@ -578,6 +538,8 @@ if __name__ == '__main__':
                         predator.energy_level -= self.predators_cost_of_reproduction
                         new_predator_name = self.create_agent(self.predator_type_nr, predator.x, predator.y)
                         print(new_predator_name + " created from " + predator.agent_name)
+                        new_predator_instance = self.instance(new_predator_name)
+                        new_predator_instance.weights = predator.weights
                 case self.prey_type_nr:
                     prey = agent_instance
                     prey.age += 1
@@ -598,15 +560,12 @@ if __name__ == '__main__':
                                 self.dones[eaten_grass_instance.agent_name] = True
                                 print(prey.agent_name + " is eating " + eaten_grass_instance.agent_name +
                                       " and has energy-level " + str(prey.energy_level) + ", grass dies ")
-                            else:
-                                pass
-                                # print(prey.agent_name + " is eating " + eaten_grass_instance.agent_name +
-                                #      " and has energy-level " + str(prey.energy_level) + ", grass stays alive")
                     elif prey.energy_level > self.prey_reproduction_energy_minimum:
                         prey.energy_level -= self.prey_cost_of_reproduction
                         new_prey_name = self.create_agent(self.prey_type_nr, prey.x, prey.y)
                         print(new_prey_name + " created from " + prey.agent_name)
-
+                        new_prey_instance = self.instance(new_prey_name)
+                        new_prey_instance.weights = prey.weights
                 case self.grass_type_nr:
                     grass = agent_instance
                     grass.energy_level += self.grass_growth
@@ -666,25 +625,95 @@ if __name__ == '__main__':
                     self.agent_selection:
                 self._agent_selector._current_agent -= 1
 
-
-    def policy(_observation, agent_name):
-        # observation_space = env.observation_spaces(agent)
-        _action = None
-        if env.agents_name_to_instance_dict[agent_name].agent_type_name == "predator":
-            _action = env.act_space.sample()
-
-        elif env.agents_name_to_instance_dict[agent_name].agent_type_name == "prey":
-            _action = env.act_space.sample()
-
-        elif env.agents_name_to_instance_dict[agent_name].agent_type_name == "grass":
-            _action = 4
-        return _action
-
-
     env = PredatorPreyGridEnv(x_size,
                               n_initial_predators,
                               n_initial_prey,
                               n_initial_grass)
+
+    def policy(_observation, agent_name):
+
+        def get_neighborhood_location(_env, _x, _y):
+            n_agents_in_neighborhood = np.zeros([_env.n_agent_types, _env.n_neighborhood_cells], dtype=int)
+            moore_index = 0
+            for d_x in [-1, 0, 1]:
+                for d_y in [-1, 0, 1]:
+                    x_neighbor_location = (_x + d_x) % _env.x_size
+                    y_neighbor_location = (_y + d_y) % _env.x_size
+                    n_agents_in_neighborhood[_env.predator_type_nr][moore_index] = \
+                        _env.n_agents_in_grid_cells[_env.predator_type_nr][x_neighbor_location, y_neighbor_location]
+                    n_agents_in_neighborhood[_env.prey_type_nr][moore_index] = \
+                        _env.n_agents_in_grid_cells[_env.prey_type_nr][x_neighbor_location, y_neighbor_location]
+                    n_agents_in_neighborhood[_env.grass_type_nr][moore_index] = \
+                        _env.n_agents_in_grid_cells[_env.grass_type_nr][x_neighbor_location, y_neighbor_location]
+                    moore_index += 1
+            return n_agents_in_neighborhood
+
+        def get_features(_env, _x, _y):
+            features = np.zeros(_env.n_features)
+            n_agents_in_neighborhood = get_neighborhood_location(_env, _x, _y)  # 3 x 9 matrix
+            n_predators_in_grid = _env.n_agents_in_grid[_env.predator_type_nr]
+            n_prey_in_grid = _env.n_agents_in_grid[_env.prey_type_nr]
+            n_grass_in_grid = _env.n_agents_in_grid[_env.grass_type_nr]
+            n_predators_in_neighborhood = sum(n_agents_in_neighborhood[_env.predator_type_nr][:])
+            n_prey_in_neighborhood = sum(n_agents_in_neighborhood[_env.prey_type_nr][:])
+            n_grass_in_neighborhood = sum(n_agents_in_neighborhood[_env.grass_type_nr][:])
+            match agent_instance.agent_type_nr:
+                case _env.predator_type_nr:
+                    if n_prey_in_grid != 0:
+                        features[0] = n_prey_in_neighborhood / n_prey_in_grid
+                    else:
+                        features[0] = 0
+                    if n_predators_in_grid != 0:
+                        features[1] = n_predators_in_neighborhood / n_predators_in_grid
+                    else:
+                        features[1] = 0
+                    if n_grass_in_grid != 0:
+                        features[2] = n_grass_in_neighborhood / n_grass_in_grid
+                    else:
+                        features[2] = 0
+                    if n_prey_in_neighborhood != 0:
+                        for i in range(_env.n_neighborhood_cells):
+                            features[i+3] = n_agents_in_neighborhood[_env.prey_type_nr][i] / n_prey_in_neighborhood
+                    else:
+                        for i in range(_env.n_neighborhood_cells):
+                            features[i+3] = 0
+            return features
+
+        def neighborhood_evaluation(_env, _x, _y):
+            """
+            Evaluate the neighboring cells
+            """
+            moore_index = 0
+            _score = np.zeros(_env.n_neighborhood_cells)
+            for d_x in [-1, 0, 1]:
+                for d_y in [-1, 0, 1]:
+                    x_eval = (_x + d_x) % _env.x_size
+                    y_eval = (_y + d_y) % _env.x_size
+                    f_i = get_features(_env, x_eval, y_eval)
+                    _agent_instance = _env.instance(_env.agent_selection)
+                    cell_score = np.dot(f_i, _agent_instance.weights)
+                    _score[moore_index] = cell_score
+                    moore_index += 1
+            return _score
+
+        agent_instance = env.instance(agent_name)
+        # observation_space = env.observation_spaces(agent)
+        _action = None
+        if agent_instance.agent_type_nr == 2: # grass
+            _action = 4  # no move
+        else:
+
+            r = env.np_random.rand()
+
+            if r < 1-env.epsilon:  # exploitation
+                score = neighborhood_evaluation(env, agent_instance.x, agent_instance.y)
+                best_score_index = np.argmax(score[:])  # select the line with the best score
+                _action = best_score_index
+                agent_instance.q = score[best_score_index]
+            else:  # exploration
+                _action = env.act_space.sample()
+        return _action
+
 
     env.reset(seed_nr)
     iteration = 0
