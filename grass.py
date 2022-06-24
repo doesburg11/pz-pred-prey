@@ -8,5 +8,5 @@ class Grass:
         self.y = y
         self.id_nr = id_nr
 
-        self.agent_name = "grass_"+str(self.id_nr)
+        self.agent_name = str()
         self.energy_level = 0
